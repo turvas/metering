@@ -1,0 +1,12 @@
+# Contents of /etc/systemd/system/metering.service
+[Unit]
+Description=Metering service by turvas
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=/opt/metering/measure.py
+
+[Install]
+WantedBy=multi-user.target
