@@ -1,6 +1,7 @@
 # metering script for raspberry pi
 
-reading from gpio 3
+reading from gpio 3,
+
 requires schedule python module, 
 ```bash
 pip install schedule
