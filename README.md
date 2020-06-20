@@ -1,2 +1,3 @@
 # metering script for raspberry pi
-# reading from gpio 3
+
+reading from gpio 3
