@@ -1,5 +1,11 @@
-import os
+
 import datetime
+# manually install all below: pip install requests
+import requests
+import urllib
+import schedule
+import time
+#from gpiozero import
 
 # by hour, index is hr
 transahinnad = [0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274]
@@ -7,8 +13,32 @@ transahinnad = [0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 
 taastuvenergiatasu = 0.0113
 # kuutasu jagatud tunni peale (25A siin)
 ampritasu = 0.0112
+baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
+filename = "nps-export.csv"
+schedule1 = []
 
+# filename to save
+def downloadFile(filename):
+    # &start=2020-04-12+21:00:00&end=2020-04-13+21:00:00&format=csv
+    # &start=2020-04-12+21%3A00%3A00&end=2020-04-13+21%3A00%3A00&format=csv
+    hourInGMT="21"  # todo, calculate based on local time DST
+    now = datetime.datetime.now()
+    start = now.strftime("%Y-%m-%d")    # UTC time in URL, prognosis starts yesterday from period (which is today)
+    tomorrow = now + datetime.timedelta(1)   # add 1 day
+    end = tomorrow.strftime("%Y-%m-%d")
+    # json returned with this quote
+    #uri = "&start="+start+"+21:00:00&end="+end+"+21:00:00&format=csv" # UTC time in URL, EEST = +03:00
+    #url = baseurl + urllib.quote(uri)
+    uri = "&start=" + start + "+"+hourInGMT+"%3A00%3A00&end="+end+"+"+hourInGMT+"%3A00%3A00&format=csv"
+    url = baseurl + uri
+    r = requests.get(url, allow_redirects=True)
+    if len(r.content) > 0:
+        open(filename, 'w').write(r.content)
+        print ("File downloaded OK")
+    else:
+        print("ERROR: download of " + url + " failed!")
 
+# True if string can be coverted to float
 def isFloat(value):
     try:
         float(value)
@@ -16,7 +46,7 @@ def isFloat(value):
     except ValueError:
         return False
 
-# out list od 24 elements, kwh
+# out list of 24 elements, Eur/kwh
 def readFile(fn):
     borsihind = []
     f = open(fn, "r")
@@ -24,8 +54,8 @@ def readFile(fn):
         items = line.split(";")
         if items[0] == 'ee':        # can be lv, lt, fi..
             item2 = items[2]
-            hind1 = item2.replace("\n", "")  # last item contain CR
-            hind = hind1.replace(",",".")  # input file uses Euro form of comma
+            hind1 = item2.replace("\n", "")  # last item contains CR
+            hind = hind1.replace(",",".")  # input file uses Euro form of comma: ,
             if isFloat(hind):  # excpt first line whing is rowheadinfs
                 hindMW = float(hind)
                 hindKW = hindMW / 1000
@@ -46,40 +76,24 @@ def calcPrice(borsihind):
         hr += 1
     return hinnad
 
-# default relay is (fail-)closed, connected.
-# if needed to save power, (most of time), it will be opened/disconnected
-def controlRelay(relayID, scheduleOpen, hr=-1):
-    if hr == -1:    # not simulation/testing
-        now = datetime.datetime.now()
-        hrs = now.strftime("%H")  # string, hour 24h, localtime
-        hr = int(hrs)
-    else:           # simulation/testing
-        hrs = str(hr)
-    if scheduleOpen[hr] == True:        # activate relay => disconnect load by relay
-        print(hrs + " opening relay")
-    else:
-        print(hrs + " relay stay connected")
-
-# Price extractor for pricing dict
-def getPrice(e):
-  return e['price']
+# Price extractor for pricing dict item
+def getPrice(di):
+  return di['price']
 
 # in power kW (max. average/hr, not peak),
-# daily_consumption kWh, prices list in Eur
-#out list of 24, with True (open realy) or False (leave connected)
-def createSchedule(power, daily_consumption, prices):
+#    daily_consumption kWh, prices list(24) in Eur
+# out list of 24 (default), with True (open realy) or False (leave connected)
+def createSchedule(power, daily_consumption, prices, hrStart=0, hrEnd=24):
     priceDict = []
-    hr = 0
-    for hind in prices:   # prepare list of dictionary items for sorting
-        di = {'hour': hr, 'price': hind}
+    for hr in range(hrStart, hrEnd):    # prepare list of dictionary items for sorting
+        di = {'hour': hr, 'price': prices[hr]}
         priceDict.append(di)
-        hr += 1
     priceDict.sort(key=getPrice)    # cheapest hours first
-    i = consumed = 0
     relayOpen = []
     for hr in range(24):            # fill with disconnected state all time (save power)
         relayOpen.append(True)
-    while consumed < daily_consumption: # iterate list sorted by cheap hours (relay load connected)
+    i = consumed = 0
+    while consumed < daily_consumption:   # iterate list sorted by cheap hours (relay load connected)
         di = priceDict[i]
         hr = di['hour']
         relayOpen[hr] = False
@@ -87,14 +101,56 @@ def createSchedule(power, daily_consumption, prices):
         i += 1
     return relayOpen
 
+def logger(msg):
+    print(msg)
+    now = datetime.datetime.now()
+    f = open("control.log", 'a')
+    line = now.strftime("%Y-%m-%d %H:%M:%S %z")+" "+msg+"\n"
+    f.write(line)
+    f.close()
+
+# default relay is (fail-)closed, connected.
+# if needed to save power, (most of time), it will be opened/disconnected
+def controlRelay(relayID, scheduleOpen, hr=-1):
+    if hr == -1:    # not simulation/testing
+        now = datetime.datetime.now()
+        hrs = now.strftime("%H")  # string, hour 24h, localtime, not 0 padded
+        hr = int(hrs)
+    else:           # simulation/testing
+        hrs = str(hr)
+    if scheduleOpen[hr] == True:        # activate relay => disconnect load by relay
+        logger(hrs + " opening relay")
+    else:
+        logger(hrs + " relay stay connected")
+
+# downloads file for tomorrow and creates schedule1
+def dailyJob():
+    downloadFile(filename)
+    borsihinnad = readFile(filename)
+    hinnad = calcPrice(borsihinnad)
+    schedule1 = createSchedule(2, 10, hinnad, 0, 14) # nightly, morning
+    schedule2 = createSchedule(1, 1, hinnad, 15, 23) # after lunch
+    for hr in range(15, 24):
+        schedule1[hr] = schedule2[hr]   # overwrite
+    logger("DailyJob run")
+
+import os
 #pwd = os.getcwd()
 #print("PWD=" + pwd)
-# downloadFile
-borsihinnad = readFile("nps-export.csv")
-hinnad = calcPrice(borsihinnad)
-#print(hinnad)
-schedule1 = createSchedule(2, 10, hinnad)
-for hr in range(24): # simulation
-    controlRelay(1, schedule1, hr)
+
+#import sys
+#print(sys.version)
+#print("\n \n")
+#print(sys.path)
+
+# first time init
+dailyJob()
+
+schedule.every(5).minutes.do( controlRelay, relayID=1, scheduleOpen=schedule1 )
+schedule.every().day.at("23:56").do(dailyJob)     # minut peale viimast relay juhtimist
+
+while True:
+    schedule.run_pending()
+    time.sleep(1)
 print("valmis")
 
