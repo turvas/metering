@@ -1,12 +1,11 @@
 import os
 
 # by hour, index is hr
-transahinnad = [0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0, 02740, 02740, 02740, 02740, 02740,
-                02740, 02740, 02740, 02740, 02740, 02740, 02740, 02740, 02740, 02740, 02740, 0274]
+transahinnad = [0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274]
 # tunni kohta arvutatud
-taastuvenergiatasu = 0, 0113
+taastuvenergiatasu = 0.0113
 # kuutasu jagatud tunni peale
-ampritasu = 0, 0112
+ampritasu = 0.0112
 
 
 def isFloat(value):
@@ -23,12 +22,14 @@ def readFile(fn):
     f = open(fn, "r")
     for line in f:
         items = line.split(";")
-        item2 = items[2]
-        hind = item2.replace("\n", "")  # last item contain CR
-        if isFloat(hind):  # excpt first line whing is rowheadinfs
-            hindMW = float(hind)
-            hindKW = hindMW / 1000
-            borsihind.append(hindKW)
+        if items[0] == 'ee':        # can be lv, lt, fi..
+            item2 = items[2]
+            hind1 = item2.replace("\n", "")  # last item contain CR
+            hind = hind1.replace(",",".")  # input file uses Euro form of comma
+            if isFloat(hind):  # excpt first line whing is rowheadinfs
+                hindMW = float(hind)
+                hindKW = hindMW / 1000
+                borsihind.append(hindKW)
     f.close()
     return borsihind
 
@@ -47,7 +48,8 @@ def calcPrice(borsihind):
 
 
 pwd = os.getcwd()
-print("PWD=" + pwd)
+#print("PWD=" + pwd)
 borsihinnad = readFile("nps-export.csv")
 hinnad = calcPrice(borsihinnad)
-# print(hinnad)
+print(hinnad)
+print("valmis")
