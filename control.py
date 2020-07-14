@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import datetime
 import time
+import os
 # manually install all below: pip install requests
 import requests
 import schedule
@@ -15,9 +16,29 @@ taastuvenergiatasu = 0.0113
 # kuutasu jagatud tunni peale (25A siin)
 ampritasu = 0.0112
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
-filename = "/var/metering/nps-export.csv"
+dirpath = ""
 hinnad = []     # list 24, kwh cost by hr
 schedule1 = []
+schedules = []  # list of schedules (which are lists)
+relays = [
+    {'name': 'boiler', 'gpioPin':4, 'power':2, 'daily_consumption': 10, 'hrStart2': 15, 'consumption2': 1}
+]
+
+# log to logfile and screen
+def logger(msg, output="both"):
+    print(msg)
+    now = datetime.datetime.now()
+    line = now.strftime("%Y-%m-%d %H:%M:%S %z")+" "+msg+"\n"
+    with open(dirpath + "control.log", 'a') as f:
+        f.write(line)
+    #f.close()
+
+# sets OS dependent directory
+def setDirPath():
+    global dirpath
+    if os.name == 'posix':
+        dirpath = "/var/metering/"
+    return dirpath
 
 # filename to save
 def downloadFile(filename, firstRun=False):
@@ -30,19 +51,16 @@ def downloadFile(filename, firstRun=False):
     start = now.strftime("%Y-%m-%d")    # UTC time in URL, prognosis starts yesterday from period (which is today)
     tomorrow = now + datetime.timedelta(1)   # add 1 day
     end = tomorrow.strftime("%Y-%m-%d")
-    # json returned with this quote
-    #uri = "&start="+start+"+21:00:00&end="+end+"+21:00:00&format=csv" # UTC time in URL, EEST = +03:00
-    #url = baseurl + urllib.quote(uri)
     uri = "&start=" + start + "+"+hourInGMT+"%3A00%3A00&end="+end+"+"+hourInGMT+"%3A00%3A00&format=csv"
     url = baseurl + uri
     r = requests.get(url, allow_redirects=True)
     if len(r.content) > 0:
         open(filename, 'w').write(str(r.content))
-        print ("File downloaded OK")
+        logger ("File downloaded OK to " + filename)
     else:
-        print("ERROR: download of " + url + " failed!")
+        logger("ERROR: download of " + url + " failed!")
 
-# True if string can be coverted to float
+# True if string can be converted to float
 def isFloat(value):
     try:
         float(value)
@@ -51,9 +69,9 @@ def isFloat(value):
         return False
 
 # out list of 24 elements, Eur/kwh
-def readFile(fn):
+def readFile(filename):
     borsihind = []
-    with open(fn, "r") as f:
+    with open(filename, "r") as f:
         for line in f:
             items = line.split(";")
             if items[0] == 'ee':        # can be lv, lt, fi..
@@ -108,6 +126,7 @@ def createSchedule(power, daily_consumption, prices, hrStart=0, hrEnd=24):
 # prepares 2-zone schedule
 # hrStart2 - starining hr of zone2
 # consumption2 - during zone 2 (usually significantly less than daily_consumption)
+# out list of 24 (always), with True (open realy) or False (leave connected)
 def createSchedule2(power, daily_consumption, prices, hrStart2, consumption2):
     schedule0 = createSchedule(power, daily_consumption-consumption2, prices, 0, hrStart2-1)
     schedule2 = createSchedule(power, consumption2, hinnad, hrStart2, 23) # after cutover
@@ -115,18 +134,19 @@ def createSchedule2(power, daily_consumption, prices, hrStart2, consumption2):
         schedule0[hr] = schedule2[hr]   # overwrite
     return schedule0
 
-
-def logger(msg):
-    print(msg)
-    now = datetime.datetime.now()
-    f = open("/var/metering/control.log", 'a')
-    line = now.strftime("%Y-%m-%d %H:%M:%S %z")+" "+msg+"\n"
-    f.write(line)
-    f.close()
+# creates schedules for all relays
+# returns count
+def createSchedules():
+    global schedules
+    for relay in relays:
+        schedule0 = createSchedule2(relay["power"], relay["daily_consumption"], hinnad,
+                                    relay["hrStart2"], relay["consumption2"])
+        schedules.append(schedule0)
+    return len(schedules)
 
 # default relay is (fail-)closed, connected.
 # if needed to save power, (most of time), it will be opened/disconnected
-def controlRelay(relayID, scheduleOpen, hr=-1):
+def controlRelay(gpioPIN, scheduleOpen, hr=-1):
     if hr == -1:    # not simulation/testing
         now = datetime.datetime.now()
         hrs = now.strftime("%H")  # string, hour 24h, localtime, not 0 padded
@@ -134,9 +154,16 @@ def controlRelay(relayID, scheduleOpen, hr=-1):
     else:           # simulation/testing
         hrs = str(hr)
     if scheduleOpen[hr] == True:        # activate relay => disconnect load by relay
-        logger(hrs + " opening relay " + str(relayID))
+        logger(hrs + " opening relay " + str(gpioPIN))
     else:
-        logger(hrs + " stay connected relay " + str(relayID))
+        logger(hrs + " stay connected relay " + str(gpioPIN))
+
+# used by scheduler, iterates all relays/schedules
+def processRelays():
+    i = 0
+    for relay in relays:
+        controlRelay(relay["gpioPin"], schedules[i]) # assumes schedules order is not modified
+        i += 1
 
 # downloads file for tomorrow and creates schedule1
 def dailyJob(firstRun=False):
@@ -144,10 +171,11 @@ def dailyJob(firstRun=False):
     downloadFile(filename, firstRun)
     borsihinnad = readFile(filename)
     hinnad = calcPrice(borsihinnad)
-    schedule1 = createSchedule2(2, 10, hinnad, 15, 1)
-    logger("DailyJob run completed")
+    #schedule1 = createSchedule2(2, 10, hinnad, 15, 1)
+    n = createSchedules()
+    logger("DailyJob run completed, created " +str(n)+ " schedules")
 
-import os
+#import os
 #pwd = os.getcwd()
 #print("PWD=" + pwd)
 
@@ -156,13 +184,16 @@ import os
 #print("\n \n")
 #print(sys.path)
 
+setDirPath()
+filename = dirpath + "nps-export.csv"
 # first time init
 dailyJob(True)  # first time to load today-s prices
-schedule.every(5).minutes.do( controlRelay, relayID=1, scheduleOpen=schedule1 )
+#schedule.every(5).minutes.do( controlRelay, relayID=1, scheduleOpen=schedule1 )
+schedule.every(5).minutes.do(processRelays)
 schedule.every().day.at("23:56").do(dailyJob)     # minut peale viimast relay juhtimist
 
 while True:
     schedule.run_pending()
-    time.sleep(1)
+    time.sleep(1)               # seconds
 print("valmis")
 
