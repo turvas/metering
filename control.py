@@ -1,4 +1,4 @@
-
+#!/usr/bin/python
 import datetime
 import time
 # manually install all below: pip install requests
@@ -15,7 +15,7 @@ taastuvenergiatasu = 0.0113
 # kuutasu jagatud tunni peale (25A siin)
 ampritasu = 0.0112
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
-filename = "nps-export.csv"
+filename = "/var/metering/nps-export.csv"
 hinnad = []     # list 24, kwh cost by hr
 schedule1 = []
 
@@ -119,7 +119,7 @@ def createSchedule2(power, daily_consumption, prices, hrStart2, consumption2):
 def logger(msg):
     print(msg)
     now = datetime.datetime.now()
-    f = open("control.log", 'a')
+    f = open("/var/metering/control.log", 'a')
     line = now.strftime("%Y-%m-%d %H:%M:%S %z")+" "+msg+"\n"
     f.write(line)
     f.close()
