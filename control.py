@@ -134,9 +134,9 @@ def controlRelay(relayID, scheduleOpen, hr=-1):
     else:           # simulation/testing
         hrs = str(hr)
     if scheduleOpen[hr] == True:        # activate relay => disconnect load by relay
-        logger(hrs + " opening relay")
+        logger(hrs + " opening relay " + str(relayID))
     else:
-        logger(hrs + " relay stay connected")
+        logger(hrs + " stay connected relay " + str(relayID))
 
 # downloads file for tomorrow and creates schedule1
 def dailyJob(firstRun=False):
@@ -145,10 +145,6 @@ def dailyJob(firstRun=False):
     borsihinnad = readFile(filename)
     hinnad = calcPrice(borsihinnad)
     schedule1 = createSchedule2(2, 10, hinnad, 15, 1)
-    #schedule1 = createSchedule(2, 10, hinnad, 0, 14) # nightly, morning
-    #schedule2 = createSchedule(1, 1, hinnad, 15, 23) # after lunch
-    #for hr in range(15, 24):
-    #    schedule1[hr] = schedule2[hr]   # overwrite
     logger("DailyJob run completed")
 
 import os
