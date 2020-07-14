@@ -1,27 +1,29 @@
 #!/usr/bin/python
+# used to control heating, boilers etc, based on lowest hourly energy prices
+# takes account expected energy need and average (over hr) used power
+# Copyright by turvas
+#
 import datetime
 import time
 import os
 # manually install all below: pip install requests
 import requests
 import schedule
-#import urllib
-
 #from gpiozero import
 
 # by hour, index is hr
 transahinnad = [0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274]
-# tunni kohta arvutatud
-taastuvenergiatasu = 0.0113
-# kuutasu jagatud tunni peale (25A siin)
-ampritasu = 0.0112
+taastuvenergiatasu = 0.0113     # tunni kohta arvutatud
+ampritasu = 0.0112              # kuutasu jagatud tunni peale (25A siin)
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
-dirpath = ""
-hinnad = []     # list 24, kwh cost by hr
-schedule1 = []
-schedules = []  # list of schedules (which are lists)
+dirpath = ""                    # subject to calc, depending OS
+filename = "nps-export.csv"     # subject to dir prepend
+hinnad = []                     # list 24, kwh cost by hr
+#schedule1 = []
+schedules = []                  # list of schedules (which are lists)
+# power kW, consumption in Kwh, hr in 24h system
 relays = [
-    {'name': 'boiler', 'gpioPin':4, 'power':2, 'daily_consumption': 10, 'hrStart2': 15, 'consumption2': 1}
+    {'name':'boiler', 'gpioPin':4, 'power':2, 'daily_consumption':10, 'hrStart2':15, 'consumption2':1}
 ]
 
 # log to logfile and screen
@@ -31,7 +33,6 @@ def logger(msg, output="both"):
     line = now.strftime("%Y-%m-%d %H:%M:%S %z")+" "+msg+"\n"
     with open(dirpath + "control.log", 'a') as f:
         f.write(line)
-    #f.close()
 
 # sets OS dependent directory
 def setDirPath():
@@ -42,8 +43,7 @@ def setDirPath():
 
 # filename to save
 def downloadFile(filename, firstRun=False):
-    # &start=2020-04-12+21:00:00&end=2020-04-13+21:00:00&format=csv
-    # &start=2020-04-12+21%3A00%3A00&end=2020-04-13+21%3A00%3A00&format=csv
+
     hourInGMT="21"  # todo, calculate based on local time DST
     now = datetime.datetime.now()
     if firstRun:    # wind back time by 1 day, as we need today-s prices
@@ -51,6 +51,8 @@ def downloadFile(filename, firstRun=False):
     start = now.strftime("%Y-%m-%d")    # UTC time in URL, prognosis starts yesterday from period (which is today)
     tomorrow = now + datetime.timedelta(1)   # add 1 day
     end = tomorrow.strftime("%Y-%m-%d")
+    # &start=2020-04-12+21:00:00&end=2020-04-13+21:00:00&format=csv
+    # &start=2020-04-12+21%3A00%3A00&end=2020-04-13+21%3A00%3A00&format=csv
     uri = "&start=" + start + "+"+hourInGMT+"%3A00%3A00&end="+end+"+"+hourInGMT+"%3A00%3A00&format=csv"
     url = baseurl + uri
     r = requests.get(url, allow_redirects=True)
@@ -69,7 +71,7 @@ def isFloat(value):
         return False
 
 # out list of 24 elements, Eur/kwh
-def readFile(filename):
+def readPrices(filename):
     borsihind = []
     with open(filename, "r") as f:
         for line in f:
@@ -87,12 +89,11 @@ def readFile(filename):
 
 # in list of 24 elements of borsihind
 # out list of 24 elements of real price, incl time sensitive trans, and other fix fees
-def calcPrice(borsihind):
-    # type: (borsihind) -> list
-    global transahinnad, taastuvenergiatasu, ampritasu
+def calcPrices(borsihinnad):
+    #global transahinnad, taastuvenergiatasu, ampritasu
     hr = 0
     hinnad = []
-    for raw in borsihind:
+    for raw in borsihinnad:
         hind = raw + transahinnad[hr] + taastuvenergiatasu + ampritasu
         hinnad.append(hind)
         hr += 1
@@ -165,13 +166,12 @@ def processRelays():
         controlRelay(relay["gpioPin"], schedules[i]) # assumes schedules order is not modified
         i += 1
 
-# downloads file for tomorrow and creates schedule1
+# downloads file for tomorrow and creates schedules
 def dailyJob(firstRun=False):
-    global schedule1, hinnad
+    global hinnad
     downloadFile(filename, firstRun)
-    borsihinnad = readFile(filename)
-    hinnad = calcPrice(borsihinnad)
-    #schedule1 = createSchedule2(2, 10, hinnad, 15, 1)
+    borsihinnad = readPrices(filename)
+    hinnad = calcPrices(borsihinnad)
     n = createSchedules()
     logger("DailyJob run completed, created " +str(n)+ " schedules")
 
@@ -181,19 +181,23 @@ def dailyJob(firstRun=False):
 
 #import sys
 #print(sys.version)
-#print("\n \n")
 #print(sys.path)
 
-setDirPath()
-filename = dirpath + "nps-export.csv"
-# first time init
-dailyJob(True)  # first time to load today-s prices
-#schedule.every(5).minutes.do( controlRelay, relayID=1, scheduleOpen=schedule1 )
-schedule.every(5).minutes.do(processRelays)
-schedule.every().day.at("23:56").do(dailyJob)     # minut peale viimast relay juhtimist
+def main():
+    global filename
+    setDirPath()
+    filename = dirpath + filename   # prepend dir to original name
 
-while True:
-    schedule.run_pending()
-    time.sleep(1)               # seconds
-print("valmis")
+    dailyJob(True)                  # first time to load today-s prices
+    #schedule.every(5).minutes.do( controlRelay, relayID=1, scheduleOpen=schedule1 )
+    schedule.every(5).minutes.do(processRelays)
+    schedule.every().day.at("23:56").do(dailyJob)     # minut peale viimast relay juhtimist
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)               # seconds
+    print("valmis, exit..")
+
+if __name__ == '__main__':
+    main()
 
