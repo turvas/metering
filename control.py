@@ -1,10 +1,11 @@
 
 import datetime
+import time
 # manually install all below: pip install requests
 import requests
-import urllib
 import schedule
-import time
+#import urllib
+
 #from gpiozero import
 
 # by hour, index is hr
@@ -15,14 +16,17 @@ taastuvenergiatasu = 0.0113
 ampritasu = 0.0112
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
 filename = "nps-export.csv"
+hinnad = []     # list 24, kwh cost by hr
 schedule1 = []
 
 # filename to save
-def downloadFile(filename):
+def downloadFile(filename, firstRun=False):
     # &start=2020-04-12+21:00:00&end=2020-04-13+21:00:00&format=csv
     # &start=2020-04-12+21%3A00%3A00&end=2020-04-13+21%3A00%3A00&format=csv
     hourInGMT="21"  # todo, calculate based on local time DST
     now = datetime.datetime.now()
+    if firstRun:    # wind back time by 1 day, as we need today-s prices
+        now -= datetime.timedelta(1)
     start = now.strftime("%Y-%m-%d")    # UTC time in URL, prognosis starts yesterday from period (which is today)
     tomorrow = now + datetime.timedelta(1)   # add 1 day
     end = tomorrow.strftime("%Y-%m-%d")
@@ -33,7 +37,7 @@ def downloadFile(filename):
     url = baseurl + uri
     r = requests.get(url, allow_redirects=True)
     if len(r.content) > 0:
-        open(filename, 'w').write(r.content)
+        open(filename, 'w').write(str(r.content))
         print ("File downloaded OK")
     else:
         print("ERROR: download of " + url + " failed!")
@@ -49,18 +53,18 @@ def isFloat(value):
 # out list of 24 elements, Eur/kwh
 def readFile(fn):
     borsihind = []
-    f = open(fn, "r")
-    for line in f:
-        items = line.split(";")
-        if items[0] == 'ee':        # can be lv, lt, fi..
-            item2 = items[2]
-            hind1 = item2.replace("\n", "")  # last item contains CR
-            hind = hind1.replace(",",".")  # input file uses Euro form of comma: ,
-            if isFloat(hind):  # excpt first line whing is rowheadinfs
-                hindMW = float(hind)
-                hindKW = hindMW / 1000
-                borsihind.append(hindKW)
-    f.close()
+    with open(fn, "r") as f:
+        for line in f:
+            items = line.split(";")
+            if items[0] == 'ee':        # can be lv, lt, fi..
+                item2 = items[2]
+                hind1 = item2.replace("\n", "")  # last item contains CR
+                hind = hind1.replace(",",".")  # input file uses Euro form of comma: ,
+                if isFloat(hind):  # excpt first line whing is rowheadinfs
+                    hindMW = float(hind)
+                    hindKW = hindMW / 1000
+                    borsihind.append(hindKW)
+#    f.close()
     return borsihind
 
 # in list of 24 elements of borsihind
@@ -101,6 +105,17 @@ def createSchedule(power, daily_consumption, prices, hrStart=0, hrEnd=24):
         i += 1
     return relayOpen
 
+# prepares 2-zone schedule
+# hrStart2 - starining hr of zone2
+# consumption2 - during zone 2 (usually significantly less than daily_consumption)
+def createSchedule2(power, daily_consumption, prices, hrStart2, consumption2):
+    schedule0 = createSchedule(power, daily_consumption-consumption2, prices, 0, hrStart2-1)
+    schedule2 = createSchedule(power, consumption2, hinnad, hrStart2, 23) # after cutover
+    for hr in range(hrStart2, 24):
+        schedule0[hr] = schedule2[hr]   # overwrite
+    return schedule0
+
+
 def logger(msg):
     print(msg)
     now = datetime.datetime.now()
@@ -124,15 +139,17 @@ def controlRelay(relayID, scheduleOpen, hr=-1):
         logger(hrs + " relay stay connected")
 
 # downloads file for tomorrow and creates schedule1
-def dailyJob():
-    downloadFile(filename)
+def dailyJob(firstRun=False):
+    global schedule1, hinnad
+    downloadFile(filename, firstRun)
     borsihinnad = readFile(filename)
     hinnad = calcPrice(borsihinnad)
-    schedule1 = createSchedule(2, 10, hinnad, 0, 14) # nightly, morning
-    schedule2 = createSchedule(1, 1, hinnad, 15, 23) # after lunch
-    for hr in range(15, 24):
-        schedule1[hr] = schedule2[hr]   # overwrite
-    logger("DailyJob run")
+    schedule1 = createSchedule2(2, 10, hinnad, 15, 1)
+    #schedule1 = createSchedule(2, 10, hinnad, 0, 14) # nightly, morning
+    #schedule2 = createSchedule(1, 1, hinnad, 15, 23) # after lunch
+    #for hr in range(15, 24):
+    #    schedule1[hr] = schedule2[hr]   # overwrite
+    logger("DailyJob run completed")
 
 import os
 #pwd = os.getcwd()
@@ -144,8 +161,7 @@ import os
 #print(sys.path)
 
 # first time init
-dailyJob()
-
+dailyJob(True)  # first time to load today-s prices
 schedule.every(5).minutes.do( controlRelay, relayID=1, scheduleOpen=schedule1 )
 schedule.every().day.at("23:56").do(dailyJob)     # minut peale viimast relay juhtimist
 
