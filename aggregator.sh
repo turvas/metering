@@ -1,20 +1,20 @@
 #!/bin/bash
 # 1000 puslses = 1kwh
 if [ -z "$1" ]; then
-        echo Usage $0 measurements_file_path
+        echo Usage $0 measurements_file_path [day]
         exit 1
 else
         FILE=$1
+        DAY=$2
 fi
-MSUM=0
-for day in {1..31}; do
-        if [ $day -lt 10 ]; then
-                day=0$day
-        fi
+# $1 day in month
+# sets global variable DSUM
+function calcDay {
+        local day=$1
+        DSUM=0
         LINES=`grep -a ^[0-9][0-9]\/$day $FILE`
-        echo Date: $day
+        #echo Date: $day
         if [ -n "$LINES" ]; then
-                DSUM=0
                 for hr in {0..23}; do
                         if [ $hr -lt 10 ]; then
                                 hr=0$hr
@@ -27,8 +27,24 @@ for day in {1..31}; do
                         echo $hr $SUM
                         ((DSUM += SUM)) # day summary update
                 done
-                echo "Total ($day): $DSUM"
         fi
+        echo "Total ($day): $DSUM kWh "
+}
+# main
+if [ -n "$DAY" ]; then
+        if [ $DAY -lt 10 ]; then
+                DAY=0$DAY
+        fi    
+        calcDay $DAY
+else
+    MSUM=0
+    for day in {1..31}; do
+        if [ $day -lt 10 ]; then
+                day=0$day
+        fi
+        echo Date: $day consumption by hr:
+        calcDay $day    # sets global variable DSUM
         ((MSUM += DSUM)) # add daily to monthone
-done
-echo "Total (month): $MSUM"
+    done
+    echo "Total (month): $MSUM kWh"
+fi
