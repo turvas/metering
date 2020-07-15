@@ -39,8 +39,9 @@ def light_pulse_seen_1(deviceCalling):
 def handle_time_event():
     global counters
     insert_row()                # log state
-    for counter in counters:    # reset counters
-        counter = 0
+    for meter in meters:
+        gpioPin = meter['gpioPin']
+        counters[gpioPin] = 0
 
 # writes impule counts to files, named by metered objects
 def insert_row():
