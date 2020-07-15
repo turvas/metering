@@ -28,7 +28,8 @@ function calcDay {
                         ((DSUM += SUM)) # day summary update
                 done
         fi
-        echo "Total ($day): $DSUM kWh "
+        DSUM_KW=$((DSUM / 1000))
+        echo "Total ($day): $DSUM_KW kWh ($DSUM Wh) "
 }
 # main
 if [ -n "$DAY" ]; then
@@ -46,5 +47,6 @@ else
         calcDay $day    # sets global variable DSUM
         ((MSUM += DSUM)) # add daily to monthone
     done
-    echo "Total (month): $MSUM kWh"
+    MSUM_KW=$((MSUM / 1000))
+    echo "Total (month): $MSUM_KW kWh"
 fi
