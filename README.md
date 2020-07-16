@@ -1,9 +1,9 @@
 # metering and control scripts for raspberry pi
 
 ## metering
-reading from gpio 3,
+multiple meters can be connected to several gpio pins, described in "meters" list
 
-requires schedule python module, 
+requires python module "schedule", 
 ```bash
 pip install schedule
 ```
@@ -16,8 +16,9 @@ sudo systemctl enable metering
 ```
 
 ## control
+multiple relays can be connected to several gpio pins, described in "relays" list
 
-requires schedule and requests python module,
+requires python modules: schedule and requests,
 ```bash
 pip install schedule requests
 ```
