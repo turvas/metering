@@ -1,14 +1,17 @@
 #!/usr/bin/python
-
+# used to read energy meters and save consumption
+# Copyright by turvas
+#
 import datetime
 import os
 import time
-# modules below might need manual install
+import random
+# modules below might need manual install everywhere
 import schedule
+# modules below might need manual install only in Windows
 from gpiozero import Device, Button
 # for Win testing
 from gpiozero.pins.mock import MockFactory # https://gpiozero.readthedocs.io/en/stable/api_pins.html#mock-pins
-import random
 
 # gpioPin is used as index in counters, thus has to be unique
 meters = [

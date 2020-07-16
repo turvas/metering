@@ -9,6 +9,7 @@ import os
 # manually install all below: pip install requests
 import requests
 import schedule
+# modules below might need manual install only in Windows
 from gpiozero import Device, LED
 # for Win testing
 from gpiozero.pins.mock import MockFactory # https://gpiozero.readthedocs.io/en/stable/api_pins.html#mock-pins
