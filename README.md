@@ -1,4 +1,9 @@
 # metering and control scripts for raspberry pi
+to install everything run
+```bash
+chmod +x install.sh
+./install.sh
+```
 
 ## metering
 multiple meters can be connected to several gpio pins, described in "meters" list
