@@ -9,28 +9,31 @@ import os
 # manually install all below: pip install requests
 import requests
 import schedule
-#from gpiozero import
+from gpiozero import Device, LED
+# for Win testing
+from gpiozero.pins.mock import MockFactory # https://gpiozero.readthedocs.io/en/stable/api_pins.html#mock-pins
+
 
 # by hour, index is hr
 transahinnad = [0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274]
 taastuvenergiatasu = 0.0113     # tunni kohta arvutatud
 ampritasu = 0.0112              # kuutasu jagatud tunni peale (25A siin)
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
-dirpath = ""                    # subject to calc, depending OS
+dirpath = ""                    # subject to cange, depending OS
 filename = "nps-export.csv"     # subject to dir prepend
 hinnad = []                     # list 24, kwh cost by hr
-#schedule1 = []
 schedules = []                  # list of schedules (which are lists)
-# power kW, consumption in Kwh, hr in 24h system
+# power kW, consumption in Kwh, hrStart2 in 24h system
 relays = [
-    {'name':'boiler', 'gpioPin':4, 'power':2, 'daily_consumption':10, 'hrStart2':15, 'consumption2':1}
+    {'name':'boiler1', 'gpioPin':17, 'power':2, 'daily_consumption':10, 'hrStart2':15, 'consumption2':1},
+    {'name':'boiler2', 'gpioPin':27, 'power':2, 'daily_consumption':10, 'hrStart2':15, 'consumption2':1}
 ]
 
 # log to logfile and screen
 def logger(msg, output="both"):
-    print(msg)
     now = datetime.datetime.now()
     line = now.strftime("%Y-%m-%d %H:%M:%S %z")+" "+msg+"\n"
+    print(line)
     with open(dirpath + "control.log", 'a') as f:
         f.write(line)
 
@@ -39,6 +42,8 @@ def setDirPath():
     global dirpath
     if os.name == 'posix':
         dirpath = "/var/metering/"
+    else:            # windows
+        Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
     return dirpath
 
 # filename to save
@@ -72,20 +77,19 @@ def isFloat(value):
 
 # out list of 24 elements, Eur/kwh
 def readPrices(filename):
-    borsihind = []
+    borsihinnad = []
     with open(filename, "r") as f:
-        for line in f:
+        for line in f:                  # read by line
             items = line.split(";")
             if items[0] == 'ee':        # can be lv, lt, fi..
                 item2 = items[2]
                 hind1 = item2.replace("\n", "")  # last item contains CR
-                hind = hind1.replace(",",".")  # input file uses Euro form of comma: ,
-                if isFloat(hind):  # excpt first line whing is rowheadinfs
+                hind = hind1.replace(",",".")   # input file uses Euro form of comma: ,
+                if isFloat(hind):               # excpt first line which is rowheads
                     hindMW = float(hind)
                     hindKW = hindMW / 1000
-                    borsihind.append(hindKW)
-#    f.close()
-    return borsihind
+                    borsihinnad.append(hindKW)
+    return borsihinnad
 
 # in list of 24 elements of borsihind
 # out list of 24 elements of real price, incl time sensitive trans, and other fix fees
@@ -111,9 +115,9 @@ def createSchedule(power, daily_consumption, prices, hrStart=0, hrEnd=24):
     for hr in range(hrStart, hrEnd):    # prepare list of dictionary items for sorting
         di = {'hour': hr, 'price': prices[hr]}
         priceDict.append(di)
-    priceDict.sort(key=getPrice)    # cheapest hours first
+    priceDict.sort(key=getPrice)        # cheapest hours first
     relayOpen = []
-    for hr in range(24):            # fill with disconnected state all time (save power)
+    for hr in range(24):                # fill with disconnected state all time (save power)
         relayOpen.append(True)
     i = consumed = 0
     while consumed < daily_consumption:   # iterate list sorted by cheap hours (relay load connected)
@@ -143,6 +147,7 @@ def createSchedules():
         schedule0 = createSchedule2(relay["power"], relay["daily_consumption"], hinnad,
                                     relay["hrStart2"], relay["consumption2"])
         schedules.append(schedule0)
+        logger(relay['name']+": "+str(schedule0))
     return len(schedules)
 
 # default relay is (fail-)closed, connected.
@@ -150,14 +155,17 @@ def createSchedules():
 def controlRelay(gpioPIN, scheduleOpen, hr=-1):
     if hr == -1:    # not simulation/testing
         now = datetime.datetime.now()
-        hrs = now.strftime("%H")  # string, hour 24h, localtime, not 0 padded
+        hrs = now.strftime("%H")    # string, hour 24h, localtime, not 0 padded
         hr = int(hrs)
-    else:           # simulation/testing
+    else:                           # simulation/testing
         hrs = str(hr)
-    if scheduleOpen[hr] == True:        # activate relay => disconnect load by relay
+    relay = LED(gpioPIN)
+    if scheduleOpen[hr] == True:    # activate relay => disconnect load by relay
         logger(hrs + " opening relay " + str(gpioPIN))
+        relay.on()
     else:
         logger(hrs + " stay connected relay " + str(gpioPIN))
+        relay.off()
 
 # used by scheduler, iterates all relays/schedules
 def processRelays():
@@ -175,21 +183,12 @@ def dailyJob(firstRun=False):
     n = createSchedules()
     logger("DailyJob run completed, created " +str(n)+ " schedules")
 
-#import os
-#pwd = os.getcwd()
-#print("PWD=" + pwd)
-
-#import sys
-#print(sys.version)
-#print(sys.path)
-
 def main():
     global filename
     setDirPath()
     filename = dirpath + filename   # prepend dir to original name
 
     dailyJob(True)                  # first time to load today-s prices
-    #schedule.every(5).minutes.do( controlRelay, relayID=1, scheduleOpen=schedule1 )
     schedule.every(5).minutes.do(processRelays)
     schedule.every().day.at("23:56").do(dailyJob)     # minut peale viimast relay juhtimist
 
