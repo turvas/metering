@@ -4,6 +4,7 @@ to install everything run
 chmod +x install.sh
 ./install.sh
 ```
+or can install both components separatley as described below
 
 ## metering
 multiple meters can be connected to several gpio pins, described in "meters" list
