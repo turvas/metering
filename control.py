@@ -15,10 +15,12 @@ from gpiozero import Device, LED
 from gpiozero.pins.mock import MockFactory # https://gpiozero.readthedocs.io/en/stable/api_pins.html#mock-pins
 
 
-# by hour, index is hr
+# by hour, index is hr, todo-2 add summer and wintertime difference handling, if not same as todo-1
+from requests.models import Response
+
 transahinnad = [0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274]
-taastuvenergiatasu = 0.0113     # tunni kohta arvutatud
-ampritasu = 0.0112              # kuutasu jagatud tunni peale (25A siin)
+taastuvenergiatasu = 0.0113     # tunni kohta arvutatud, todo-3 lisada arvutus
+ampritasu = 0.0112              # kuutasu jagatud tunni peale (25A siin), todo-3 lisada arvutus
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
 dirpath = ""                    # subject to cange, depending OS
 filename = "nps-export.csv"     # subject to dir prepend
@@ -26,8 +28,8 @@ hinnad = []                     # list 24, kwh cost by hr
 schedules = []                  # list of schedules (which are lists)
 # power kW, consumption in Kwh, hrStart2 in 24h system
 relays = [
-    {'name':'boiler1', 'gpioPin':17, 'power':2, 'daily_consumption':10, 'hrStart2':15, 'consumption2':1},
-    {'name':'boiler2', 'gpioPin':27, 'power':2, 'daily_consumption':10, 'hrStart2':15, 'consumption2':1}
+    {'name':'boiler1', 'gpioPin':17, 'power':2, 'daily_consumption':5, 'hrStart2':15, 'consumption2':1},
+    {'name':'boiler2', 'gpioPin':27, 'power':2, 'daily_consumption':5, 'hrStart2':15, 'consumption2':1}
 ]
 
 # log to logfile and screen
@@ -49,11 +51,16 @@ def setDirPath():
 
 # filename to save
 def downloadFile(filename, firstRun=False):
-
-    hourInGMT="21"  # todo, calculate based on local time DST
     now = datetime.datetime.now()
     if firstRun:    # wind back time by 1 day, as we need today-s prices
         now -= datetime.timedelta(1)
+    if time.daylight and time.localtime().tm_isdst > 0: # consider DST,
+        offset = time.altzone                           # is negative and in seconds
+    else:
+        offset = time.timezone
+    offset = offset / 3660                              # in seconds -> hrs
+    hourInGMT = str(24+offset)
+    utc_offset = str(0-offset) + ":00"                  # now.strftime("%z") not working on Win
     start = now.strftime("%Y-%m-%d")    # UTC time in URL, prognosis starts yesterday from period (which is today)
     tomorrow = now + datetime.timedelta(1)   # add 1 day
     end = tomorrow.strftime("%Y-%m-%d")
@@ -61,10 +68,10 @@ def downloadFile(filename, firstRun=False):
     # &start=2020-04-12+21%3A00%3A00&end=2020-04-13+21%3A00%3A00&format=csv
     uri = "&start=" + start + "+"+hourInGMT+"%3A00%3A00&end="+end+"+"+hourInGMT+"%3A00%3A00&format=csv"
     url = baseurl + uri
-    r = requests.get(url, allow_redirects=True)
-    if len(r.content) > 0:
-        open(filename, 'w').write(str(r.content))
-        logger ("File downloaded OK to " + filename)
+    resp = requests.get(url, allow_redirects=True)  # type: Response
+    if resp.ok and len(resp.content) > 0:
+        open(filename, 'w').write(str(resp.content))
+        logger ("File downloaded OK to " + filename + " using UTC offset " + utc_offset)
     else:
         logger("ERROR: download of " + url + " failed!")
 
@@ -191,7 +198,7 @@ def main():
 
     dailyJob(True)                  # first time to load today-s prices
     schedule.every(5).minutes.do(processRelays)
-    schedule.every().day.at("23:56").do(dailyJob)     # minut peale viimast relay juhtimist
+    schedule.every().day.at("23:58").do(dailyJob)     # pisut enne uue paeva algust
 
     while True:
         schedule.run_pending()
