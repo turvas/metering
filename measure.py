@@ -62,7 +62,7 @@ def insert_row():
         with open(fn, "a") as f:
             f.write(txt)
 
-# initializes list and Buttons, todo all pullups for other inputs than 2,3
+# initializes list and Buttons, todo-1 all pullups for other inputs than 2,3
 def initCounters():
     global counters
     for i in range(32):     # create array of 32 elements
