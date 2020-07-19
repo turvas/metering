@@ -207,11 +207,21 @@ def dailyJob(firstRun=False):
     n = createSchedules()
     logger("DailyJob run completed, created " +str(n)+ " schedules")
 
-def exitHandler(signum, frame):
+# by Mayank Jaiswal
+# from https://stackoverflow.com/questions/18499497/how-to-process-sigterm-signal-gracefully
+class GracefulKiller:
+  kill_now = False
+
+  def __init__(self):
+    signal.signal(signal.SIGINT, self.exit_gracefully)
+    signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+  def exit_gracefully(self,signum, frame):
     logger("service stop signal")
     if os.name == 'posix':
         os.system('echo mmc0 | sudo tee/sys/class /leds / led0 / trigger')  # restore overridy by us
-    raise IOError("exiting..")
+
+    self.kill_now = True
 
 def main():
     global filename
@@ -223,9 +233,9 @@ def main():
     schedule.every().day.at("23:58").do(dailyJob)       # pisut enne uue paeva algust
     schedule.every(3).seconds.do(blinkLed)              # heartbeat
 
-    signal.signal(signal.SIGTERM, exitHandler)
-
-    while True:
+    #signal.signal(signal.SIGTERM, exitHandler)
+    killer = GracefulKiller()
+    while not killer.kill_now:
         schedule.run_pending()
         time.sleep(1)               # seconds
 
