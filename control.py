@@ -33,7 +33,7 @@ relays = [
 # echo none | sudo tee /sys/class/leds/led0/trigger
 # echo gpio | sudo tee /sys/class/leds/led1/trigger
 # power = None    # /sys/class/leds/led1    # power is hardwired on original Pi
-activity =None  # /sys/class/leds/led0
+activityLED =None  # /sys/class/leds/led0
 
 # log to logfile and screen
 def logger(msg, output="both"):
@@ -45,17 +45,20 @@ def logger(msg, output="both"):
 
 # sets OS dependent directory
 def setDirPath():
-    global dirpath, power, activity
+    global dirpath, power, activityLED
     if os.name == 'posix':
         dirpath = "/var/metering/"
     else:            # windows
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
     #power = LED(35)  # /sys/class/leds/led1
-    activity = LED(16)  # /sys/class/leds/led0
+    activityLED = LED(16)  # /sys/class/leds/led0
     return dirpath
-# blink system LEDs
+
+# blink system LED
 def blinkLed():
-    activity.blink()
+    activityLED.toggle()
+    time.sleep(1)
+    activityLED.toggle()
 
 # filename to save
 def downloadFile(filename, firstRun=False):
@@ -169,6 +172,7 @@ def createSchedules():
 # default relay is (fail-)closed, connected.
 # if needed to save power, (most of time), it will be opened/disconnected
 def controlRelay(gpioPIN, scheduleOpen, hr=-1):
+    global activityLED
     if hr == -1:    # not simulation/testing
         now = datetime.datetime.now()
         hrs = now.strftime("%H")    # string, hour 24h, localtime, not 0 padded
@@ -179,9 +183,11 @@ def controlRelay(gpioPIN, scheduleOpen, hr=-1):
     if scheduleOpen[hr] == True:    # activate relay => disconnect load by relay
         logger(hrs + " opening relay " + str(gpioPIN))
         relay.on()
+        activityLED.on()
     else:
         logger(hrs + " stay connected relay " + str(gpioPIN))
         relay.off()
+        activityLED.off()
 
 # used by scheduler, iterates all relays/schedules
 def processRelays():
@@ -206,8 +212,8 @@ def main():
 
     dailyJob(True)                  # first time to load today-s prices
     schedule.every(5).minutes.do(processRelays)
-    schedule.every().day.at("23:58").do(dailyJob)     # pisut enne uue paeva algust
-    schedule.every().second.do(blinkLed)        #testing
+    schedule.every().day.at("23:58").do(dailyJob)       # pisut enne uue paeva algust
+    schedule.every(3).seconds.do(blinkLed)              # heartbeat
 
     while True:
         schedule.run_pending()
