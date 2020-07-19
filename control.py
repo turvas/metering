@@ -33,8 +33,9 @@ relays = [
 # in shell
 # echo none | sudo tee /sys/class/leds/led0/trigger
 # echo gpio | sudo tee /sys/class/leds/led1/trigger
-# power = None    # /sys/class/leds/led1    # power is hardwired on original Pi
-activityLED =None  # /sys/class/leds/led0
+activityLED = None   # /sys/class/leds/led0
+# power = None       # /sys/class/leds/led1    # power is hardwired on original Pi
+
 
 # log to logfile and screen
 def logger(msg, output="both"):
@@ -53,10 +54,10 @@ def setDirPath():
     else:            # windows
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
     #power = LED(35)  # /sys/class/leds/led1
-    activityLED = LED(16)  # /sys/class/leds/led0
+    activityLED = LED(16)  # /sys/class/leds/led0   #16 on original Pi 1
     return dirpath
 
-# blink system LED
+# blink/toggle system LED for 1 sec
 def blinkLed():
     activityLED.toggle()
     time.sleep(1)
@@ -216,10 +217,10 @@ class GracefulKiller:
     signal.signal(signal.SIGINT, self.exit_gracefully)
     signal.signal(signal.SIGTERM, self.exit_gracefully)
 
-  def exit_gracefully(self,signum, frame):
+  def exit_gracefully(self, signum, frame):
     logger("service stop signal")
     if os.name == 'posix':
-        os.system('echo mmc0 | sudo tee/sys/class /leds / led0 / trigger')  # restore overridy by us
+        os.system("echo mmc0 | sudo tee/sys/class/leds/led0/trigger")  # restore override by us
 
     self.kill_now = True
 
@@ -229,11 +230,11 @@ def main():
     filename = dirpath + filename   # prepend dir to original name
 
     dailyJob(True)                  # first time to load today-s prices
+    processRelays()                 # set proper state
     schedule.every(5).minutes.do(processRelays)
+    schedule.every(3).seconds.do(blinkLed)              # heartbeat 1:2 suhtega
     schedule.every().day.at("23:58").do(dailyJob)       # pisut enne uue paeva algust
-    schedule.every(3).seconds.do(blinkLed)              # heartbeat
 
-    #signal.signal(signal.SIGTERM, exitHandler)
     killer = GracefulKiller()
     while not killer.kill_now:
         schedule.run_pending()
