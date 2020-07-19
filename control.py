@@ -9,6 +9,7 @@ import os
 # manually install all below: pip install requests
 import requests
 import schedule
+import signal
 # modules below might need manual install only in Windows
 from gpiozero import Device, LED
 # for Win testing
@@ -48,6 +49,7 @@ def setDirPath():
     global dirpath, power, activityLED
     if os.name == 'posix':
         dirpath = "/var/metering/"
+        os.system('echo none | sudo tee /sys/class/leds/led0/trigger')
     else:            # windows
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
     #power = LED(35)  # /sys/class/leds/led1
@@ -205,6 +207,11 @@ def dailyJob(firstRun=False):
     n = createSchedules()
     logger("DailyJob run completed, created " +str(n)+ " schedules")
 
+def exitHandler(signum, frame):
+    logger("service stop signal")
+    if os.name == 'posix':
+        os.system('echo mmc0 | sudo tee/sys/class /leds / led0 / trigger')  # restore overridy by us
+
 def main():
     global filename
     setDirPath()
@@ -215,9 +222,12 @@ def main():
     schedule.every().day.at("23:58").do(dailyJob)       # pisut enne uue paeva algust
     schedule.every(3).seconds.do(blinkLed)              # heartbeat
 
+    signal.signal(signal.SIGTERM, exitHandler)
+
     while True:
         schedule.run_pending()
         time.sleep(1)               # seconds
+
     print("valmis, exit..")
 
 if __name__ == '__main__':
