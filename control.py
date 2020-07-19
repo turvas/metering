@@ -32,7 +32,7 @@ relays = [
 # in shell
 # echo none | sudo tee /sys/class/leds/led0/trigger
 # echo gpio | sudo tee /sys/class/leds/led1/trigger
-power = None    # /sys/class/leds/led1
+# power = None    # /sys/class/leds/led1    # power is hardwired on original Pi
 activity =None  # /sys/class/leds/led0
 
 # log to logfile and screen
@@ -50,12 +50,12 @@ def setDirPath():
         dirpath = "/var/metering/"
     else:            # windows
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
-    power = LED(35)  # /sys/class/leds/led1
-    activity = LED(47)  # /sys/class/leds/led0
+    #power = LED(35)  # /sys/class/leds/led1
+    activity = LED(16)  # /sys/class/leds/led0
     return dirpath
 # blink system LEDs
 def blinkLed():
-    power.blink()
+    activity.blink()
 
 # filename to save
 def downloadFile(filename, firstRun=False):
