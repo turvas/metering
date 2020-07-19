@@ -211,6 +211,7 @@ def exitHandler(signum, frame):
     logger("service stop signal")
     if os.name == 'posix':
         os.system('echo mmc0 | sudo tee/sys/class /leds / led0 / trigger')  # restore overridy by us
+    raise IOError("exiting..")
 
 def main():
     global filename
