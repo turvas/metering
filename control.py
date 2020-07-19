@@ -23,6 +23,7 @@ ampritasu = 14.46/(24*30)           #0.02    # kuutasu jagatud tunni peale (25A)
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
 dirpath = ""                    # subject to cange, depending OS
 filename = "nps-export.csv"     # subject to dir prepend
+htmlfile = "schedule.html"
 hinnad = []                     # list 24, kwh cost by hr
 schedules = []                  # list of schedules (which are lists)
 # power kW, consumption in Kwh, hrStart2 in 24h system
@@ -125,6 +126,39 @@ def calcPrices(borsihinnad):
         hr += 1
     return hinnad
 
+def outputHTMLtabRow(list, isHeader=False):
+    html = "<tr>"+ "\n"
+    if isHeader == True:
+        tags=["<th>","</th>","<th>"]
+    else:
+        tags = ['<td>', '</td>', '<td bgcolor="green">"']
+    for item in list:
+        if item == False:
+            pos = 2
+        else:    # default, no backgroundcolor
+            pos = 0
+        html += tags[pos] + str(item) + tags[1] + "\n"
+    html += "</tr>"+ "\n"
+    return html
+
+def outputHTMLtable(schedules):
+    count = len(schedules[0])
+    style = '<style> ' \
+            'table, th, td {' \
+            '   border: 1px solid black;' \
+            '    width: 100 %;' \
+            '}' \
+            '</style>'
+    html = style + '<table style="width:100%">'+ "\n"
+    header = []
+    for i in range(0,count):
+        header.append(i)
+    html += outputHTMLtabRow(header, True)
+    for sh in schedules:
+        html += outputHTMLtabRow(sh)
+    html += '</table>'+ "\n"
+    return html
+
 # Price extractor for pricing dict item
 def getPrice(di):
   return di['price']
@@ -201,7 +235,7 @@ def processRelays():
 
 # downloads file for tomorrow and creates schedules
 def dailyJob(firstRun=False):
-    global hinnad
+    global hinnad, htmlfile
     logger("downloadFile ..")
     downloadFile(filename, firstRun)
     logger("readPrices ..")
@@ -210,6 +244,10 @@ def dailyJob(firstRun=False):
     hinnad = calcPrices(borsihinnad)
     logger("createSchedules ..")
     n = createSchedules()
+    html = outputHTMLtable(schedules)
+    htmlfile = dirpath + htmlfile
+    with open(htmlfile, "w") as f:
+        f.write(html)
     logger("DailyJob run completed, created " +str(n)+ " schedules")
 
 # by Mayank Jaiswal
