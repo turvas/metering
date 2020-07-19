@@ -13,14 +13,12 @@ import schedule
 from gpiozero import Device, LED
 # for Win testing
 from gpiozero.pins.mock import MockFactory # https://gpiozero.readthedocs.io/en/stable/api_pins.html#mock-pins
-
-
-# by hour, index is hr, todo-2 add summer and wintertime difference handling, if not same as todo-1
 from requests.models import Response
 
+# by hour, index is hr, todo-2 add summer and wintertime /DST difference handling
 transahinnad = [0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274]
-taastuvenergiatasu = 0.0113     # tunni kohta arvutatud, todo-3 lisada arvutus
-ampritasu = 0.0112              # kuutasu jagatud tunni peale (25A siin), todo-3 lisada arvutus
+taastuvenergiatasu = 15.6/(24*30)   #0.02     # tunni kohta arvutatud (1400 kwh)
+ampritasu = 14.46/(24*30)           #0.02    # kuutasu jagatud tunni peale (25A)
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
 dirpath = ""                    # subject to cange, depending OS
 filename = "nps-export.csv"     # subject to dir prepend
@@ -31,6 +29,11 @@ relays = [
     {'name':'boiler1', 'gpioPin':17, 'power':2, 'daily_consumption':5, 'hrStart2':15, 'consumption2':1},
     {'name':'boiler2', 'gpioPin':27, 'power':2, 'daily_consumption':5, 'hrStart2':15, 'consumption2':1}
 ]
+# in shell
+# echo none | sudo tee /sys/class/leds/led0/trigger
+# echo gpio | sudo tee /sys/class/leds/led1/trigger
+power = None    # /sys/class/leds/led1
+activity =None  # /sys/class/leds/led0
 
 # log to logfile and screen
 def logger(msg, output="both"):
@@ -42,12 +45,17 @@ def logger(msg, output="both"):
 
 # sets OS dependent directory
 def setDirPath():
-    global dirpath
+    global dirpath, power, activity
     if os.name == 'posix':
         dirpath = "/var/metering/"
     else:            # windows
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
+    power = LED(35)  # /sys/class/leds/led1
+    activity = LED(47)  # /sys/class/leds/led0
     return dirpath
+# blink system LEDs
+def blinkLed():
+    power.blink()
 
 # filename to save
 def downloadFile(filename, firstRun=False):
@@ -199,6 +207,7 @@ def main():
     dailyJob(True)                  # first time to load today-s prices
     schedule.every(5).minutes.do(processRelays)
     schedule.every().day.at("23:58").do(dailyJob)     # pisut enne uue paeva algust
+    schedule.every().second.do(blinkLed)        #testing
 
     while True:
         schedule.run_pending()

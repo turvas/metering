@@ -62,14 +62,14 @@ def insert_row():
         with open(fn, "a") as f:
             f.write(txt)
 
-# initializes list and Buttons, todo-1 all pullups for other inputs than 2,3
+# initializes list and Buttons
 def initCounters():
     global counters
     for i in range(32):     # create array of 32 elements
         counters.append(0)
     for meter in meters:
         gpioPin = meter['gpioPin']
-        button = Button(gpioPin)
+        button = Button(gpioPin)    # defaults pullup resistor True
         button.when_pressed = light_pulse_seen_1    # same callback for all
         buttons.append(button)
 
