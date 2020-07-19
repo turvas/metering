@@ -202,9 +202,13 @@ def processRelays():
 # downloads file for tomorrow and creates schedules
 def dailyJob(firstRun=False):
     global hinnad
+    logger("downloadFile ..")
     downloadFile(filename, firstRun)
+    logger("readPrices ..")
     borsihinnad = readPrices(filename)
+    logger("calcPrices ..")
     hinnad = calcPrices(borsihinnad)
+    logger("createSchedules ..")
     n = createSchedules()
     logger("DailyJob run completed, created " +str(n)+ " schedules")
 
@@ -226,15 +230,19 @@ class GracefulKiller:
 
 def main():
     global filename
+    logger("init control..")
     setDirPath()
     filename = dirpath + filename   # prepend dir to original name
 
+    logger("dailyJob..")
     dailyJob(True)                  # first time to load today-s prices
+    logger("processRelays..")
     processRelays()                 # set proper state
+    logger("prepare schedules..")
     schedule.every(5).minutes.do(processRelays)
     schedule.every(3).seconds.do(blinkLed)              # heartbeat 1:2 suhtega
     schedule.every().day.at("23:58").do(dailyJob)       # pisut enne uue paeva algust
-
+    logger("create GracefulKiller..")
     killer = GracefulKiller()
     while not killer.kill_now:
         schedule.run_pending()
