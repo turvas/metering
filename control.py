@@ -24,6 +24,7 @@ ampritasu = 14.46 / (24 * 30)  # 0.02    # kuutasu jagatud tunni peale (25A)
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
 dirpath = ""  # subject to cange, depending OS
 filename = "nps-export.csv"  # subject to dir prepend
+logfile = "control.log"
 htmlfile = "schedule.html"
 hinnad = []  # list 24, kwh cost by hr
 schedules = []  # list of schedules (which are lists)
@@ -46,7 +47,7 @@ def logger(msg, output="both"):
     now = datetime.datetime.now()
     line = now.strftime("%Y-%m-%d %H:%M:%S %z") + " " + msg + "\n"
     print(line)
-    with open(dirpath + "control.log", 'a') as f:
+    with open(dirpath + logfile, 'a') as f:
         f.write(line)
 
 
@@ -261,7 +262,7 @@ def dailyJob(firstRun=False):
         hinnad = calcPrices(borsihinnad)
         #logger("createSchedules ..")
         n = createSchedules()
-        html = outputHTMLtable(schedules + [hinnad], relays+[{"name":"Prices"}])
+        html = outputHTMLtable(schedules + [hinnad], relays+[{"name":"Prices"}]) # append last row with prices
         htmlfile = dirpath + htmlfile
         with open(htmlfile, "w") as f:
             f.write(html)

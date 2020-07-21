@@ -201,10 +201,16 @@
           Have a look on collected measurements and logs
         </div>
         <div class="content_section_text">
-          <p>
+            <p>
                 Please navigate to <a href=metering>/metering</a>
-                It's contents comes from <tt>/var/metering</tt>) 
-          </p>
+                It's contents comes from <tt>/var/metering</tt>)
+            </p>
+            <p>
+                More dynamic processing is available from
+                <script language="JavaScript">
+                    document.write('<a href="' + window.location.protocol + '//' + window.location.hostname + ':5000/">Filtering</a>' );
+                </script>
+            </p>
 
           <pre>
 /metering

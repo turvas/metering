@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Control Log</title>
+</head>
+
+<body>
+  {% block content %}
+    Choose logs for
+    <form method="post">
+        <select id="date" name="date">
+            {% for item in dates %}
+                <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
+        </select>
+        <input type="submit" value="Select">
+    </form>
+  {% endblock %}
+
+</body>
+</html>
