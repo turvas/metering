@@ -25,7 +25,7 @@ baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
 dirpath = ""  # subject to cange, depending OS
 filename = "nps-export.csv"  # subject to dir prepend
 logfile = "control.log"
-htmlfile = "schedule.html"
+htmlfile = "static/schedule.html"
 hinnad = []  # list 24, kwh cost by hr
 schedules = []  # list of schedules (which are lists)
 # power kW, consumption in Kwh, hrStart2 in 24h system

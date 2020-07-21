@@ -1,12 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Control Log</title>
-</head>
+{% extends "webapp-index.tmpl" %}
+{% block title %}Control Log{% endblock %}
 
-<body>
-  {% block content %}
+{% block head %}
+  {{ super() }}
+  <style type="text/css">
+    .important { color: #336699; }
+  </style>
+{% endblock %}
+
+{% block content %}
+  {{ super() }}
+  <h1>Contro Log</h1>
+  <p class="important">
     Choose logs for
     <form method="post">
         <select id="date" name="date">
@@ -16,7 +21,4 @@
         </select>
         <input type="submit" value="Select">
     </form>
-  {% endblock %}
-
-</body>
-</html>
+{% endblock %}
