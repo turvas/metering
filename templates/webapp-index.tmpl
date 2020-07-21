@@ -3,12 +3,6 @@
   <head>
     {% block head %}
         <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-        <!-- Latest compiled and minified CSS for Bootstrap-->
-        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
-        <!-- jQuery library -->
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-        <!-- Latest compiled JavaScript -->
-        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{% block title %}{% endblock %} - MyEnergy</title>
@@ -16,21 +10,15 @@
   </head>
 
   <body>
-    <div class="container">
-        <nav class="navbar navbar-inverse navbar-fixed-top">
-            <div class="container-fluid">
-                <div class="navbar-header">
-                    <a class="navbar-brand" href="/">MyEnergy</a>
-                </div>
-                <ul class="nav navbar-nav">
+    <div>
+                <ul>
                         {% for item in navigation %}
                             <li><a href="{{ item.href }}">{{ item.caption }}</a></li>
                         {% endfor %}
                 </ul>
-            </div>
-        </nav>
+
     </div>
-    <div class="container">
+    <div class="content">
         {% block content %}{{ body }}{% endblock %}
     </div>
     <div id="footer">

@@ -49,6 +49,7 @@ app = Flask(__name__)
 def index(body=""):
     # str = "<a href=" + url_for('control_log') + ">Control Log</a>"  # function name here
     menulist = [
+        {'caption': 'Home', 'href': url_for('index')},
         {'caption': 'Control Log', 'href': url_for('control_log')},
         {'caption': 'Schedule', 'href': url_for('schedule')}
     ]

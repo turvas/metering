@@ -1,20 +1,43 @@
-.menu_hor {
-  background-color: lightblue;
+div {
+  padding: 20px;
+  margin: 10px;
 }
 
-.w3-border {
-    border-top-color: rgb(50, 54, 56) !important;
-    border-right-color: rgb(50, 54, 56) !important;
-    border-bottom-color: rgb(50, 54, 56) !important;
-    border-left-color: rgb(50, 54, 56) !important;
+ul {
+  list-style-type: none;
+  background-color: #f3f3f3;
+  margin: 0;
+  padding: 0;
+  position: fixed;
+  top: 0;
+  width: 100%;
 }
 
-#menu {
+li {
+  float: left;
+  border-right: 1px solid #bbb;
+}
+
+a {
+  display: block;
+  padding: 8px;
+  background-color: #dddddd;
+}
+
+li a {
+  display: block;
+  color: white;
   text-align: center;
-  color: red;
+  padding: 14px 16px;
+  text-decoration: none;
+
 }
 
-#navigation {
-    background-color: lightblue;
+/* Change the link color to #111 (black) on hover */
+li a:hover {
+  background-color: #111;
+}
 
+.active {
+  background-color: #4CAF50;
 }
