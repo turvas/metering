@@ -15,26 +15,27 @@ def setDirPath():
     else:  # windows
         return dirpath
 
-def getLogRecords(date):
+def getLogRecords(date, linefeed="<br>"):
     outline = ""
     fn = dirpath + logfile
     with open(fn, 'r') as f:
         for line in f:  # read by line
             if date in line:
-                outline = outline + line + "<br>"
+                outline = outline + line + linefeed
     return outline
 
 def getLogDates():
     dateslist = []
-    datesdictlist = []
+    #datesdictlist = []
     fn = dirpath + logfile
     with open(fn, 'r') as f:
         for line in f:  # read by line
             date = line[0:10]
             if date not in dateslist:
                 dateslist.append(date)
-                datesdict = dict(value=date)
-                datesdictlist.append(datesdict)
+                #datesdict = dict(value=date)
+                #datesdictlist.append(datesdict)
+    dateslist.sort(reverse=True)    # fresh dates first
     return dateslist
 
 app = Flask(__name__)
