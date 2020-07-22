@@ -58,7 +58,7 @@ def index(body=""):
 
 @app.route('/schedule')
 def schedule():
-    filename = 'schedule.html'
+    filename = dirpath + 'schedule.html'
     with open(filename,"r") as f:
         content = f.read()
     outline = index(content)
