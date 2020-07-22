@@ -46,14 +46,14 @@ app = Flask(__name__)
 
 
 @app.route('/')
-def index(body=""):
+def index(body="", title="Home"):
     # str = "<a href=" + url_for('control_log') + ">Control Log</a>"  # function name here
     menulist = [
         {'caption': 'Home', 'href': url_for('index')},
         {'caption': 'Control Log', 'href': url_for('control_log')},
         {'caption': 'Schedule', 'href': url_for('schedule')}
     ]
-    outline = render_template('webapp-index.tmpl', navigation=menulist, body=body) + "<br>"
+    outline = render_template('webapp-index.tmpl', navigation=menulist, body=body, title=title) + "<br>"
     return outline
 
 @app.route('/schedule')
@@ -61,7 +61,7 @@ def schedule():
     filename = dirpath + 'schedule.html'
     with open(filename,"r") as f:
         content = f.read()
-    outline = index(content)
+    outline = index(content, "Schedule")
     return outline
 
 @app.route('/control-log', methods=['GET', 'POST'])
@@ -76,7 +76,7 @@ def control_log():
     outline = render_template('webapp-contol-log.tmpl', dates=dateslist) + "<br>"
 
     outline = outline + getLogRecords(date)
-    outline = index(outline)
+    outline = index(outline, "Control Log")
     return outline
 
 
