@@ -76,6 +76,7 @@ def control_log():
     outline = render_template('webapp-contol-log.tmpl', dates=dateslist) + "<br>"
 
     outline = outline + getLogRecords(date)
+    outline = index(outline)
     return outline
 
 

@@ -1,6 +1,7 @@
 div {
   padding: 20px;
   margin: 10px;
+  font-family: Verdana, Geneva, sans-serif;
 }
 
 ul {
@@ -18,19 +19,14 @@ li {
   border-right: 1px solid #bbb;
 }
 
-a {
-  display: block;
-  padding: 8px;
-  background-color: #dddddd;
-}
-
 li a {
   display: block;
   color: white;
   text-align: center;
   padding: 14px 16px;
   text-decoration: none;
-
+  font-family: Verdana, Geneva, sans-serif;
+  background-color: #999999;
 }
 
 /* Change the link color to #111 (black) on hover */
