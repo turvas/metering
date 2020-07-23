@@ -26,14 +26,35 @@ def getLogRecords(date, linefeed="<br>"):
                 outline = outline + line + linefeed
     return outline
 
-
-def getLogDates():
-    dateslist = []
-    # datesdictlist = []
-    fn = dirpath + logfile
+def getLogMetering(date, filename, linefeed="<br>"):
+    outline = ""
+    sum = []
+    dsum = 0
+    for i in range(0,24):   # fill with 0
+        sum.append(0)
+    fn = dirpath + filename
     with open(fn, 'r') as f:
         for line in f:  # read by line
-            date = line[0:10]
+            if date in line:
+                strlen = len(line)
+                hr = int(line[9:11])          # last not included
+                pulses = line[18:strlen-1]    # last char is linefeed, tody verify str lengt
+                sum[hr] += int(pulses)
+    for hr in range(0, 24):
+        outline = outline + str(hr) + ": " + str(sum[hr]) + linefeed
+        dsum += sum[hr]
+    outline = outline + "Total day:" + str (dsum)
+    return outline
+
+
+def getLogDates(filename):
+    dateslist = []
+    # datesdictlist = []
+    fn = dirpath + filename
+    with open(fn, 'r') as f:
+        for line in f:  # read by line
+            pos = line.find(" ")    # date boundary
+            date = line[0:pos]
             if date not in dateslist:
                 dateslist.append(date)
                 # datesdict = dict(value=date)
@@ -50,8 +71,10 @@ def index(body="", title="Home"):
     # str = "<a href=" + url_for('control_log') + ">Control Log</a>"  # function name here
     menulist = [
         {'caption': 'Home', 'href': url_for('index')},
-        {'caption': 'Control Log', 'href': url_for('control_log')},
-        {'caption': 'Schedule', 'href': url_for('schedule')}
+        {'caption': 'Metering', 'href': url_for('metering')},
+        {'caption': 'Schedule', 'href': url_for('schedule')},
+        {'caption': 'Control Log', 'href': url_for('control_log')}
+
     ]
     outline = render_template('webapp-index.tmpl', navigation=menulist, body=body, title=title) + "<br>"
     return outline
@@ -64,6 +87,7 @@ def schedule():
     outline = index(content, "Schedule")
     return outline
 
+
 @app.route('/control-log', methods=['GET', 'POST'])
 def control_log():
     if request.method == 'POST':  # in not first time
@@ -72,13 +96,29 @@ def control_log():
         now = datetime.datetime.now()
         date = now.strftime("%Y-%m-%d")
 
-    dateslist = getLogDates()
-    outline = render_template('webapp-contol-log.tmpl', dates=dateslist) + "<br>"
+    dateslist = getLogDates(logfile)
+    outline = render_template('webapp-contol-log.tmpl', dates=dateslist, file=logfile) + "<br>"
 
     outline = outline + getLogRecords(date)
     outline = index(outline, "Control Log")
     return outline
 
+@app.route('/metering', methods=['GET', 'POST'])
+def metering():
+    if request.method == 'POST':  # in not first time
+        date = request.form['date']
+    else:
+        now = datetime.datetime.now()
+        date = now.strftime("%Y-%m-%d")
+
+    meteringfile="pulses-boiler-2020-07.txt"
+
+    dateslist = getLogDates(meteringfile)
+    outline = render_template('webapp-contol-log.tmpl', dates=dateslist, file=meteringfile, date=date) + "<br>"
+
+    outline = outline + getLogMetering(date, meteringfile)
+    outline = index(outline, "Metering aggregation")
+    return outline
 
 if __name__ == '__main__':
     setDirPath()

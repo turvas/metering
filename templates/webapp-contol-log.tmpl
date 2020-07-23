@@ -1,7 +1,7 @@
 
 {% block content %}
   <p class="important">
-    Choose logs for
+    Choose logs for {{ file }}, date: {{ date }}
     <form method="post">
         <select id="date" name="date">
             {% for item in dates %}
