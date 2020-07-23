@@ -24,12 +24,13 @@ def isInt(value):
     except ValueError:
         return False
 
+# from control log
 def getLogRecords(date, changesOnly=True, linefeed="<br>"):
     outline = ""
     fn = dirpath + logfile
     lastaction = ""
     lastactions = []
-    for i in range(0,32):
+    for i in range(0,32):       # for relays indepenent tracking
         lastactions.append("")
     with open(fn, 'r') as f:
         for line in f:  # read by line
@@ -54,6 +55,7 @@ def getLogRecords(date, changesOnly=True, linefeed="<br>"):
                     outline = outline + line + linefeed
     return outline
 
+# aggregates hourly readings and daily sum
 def getLogMetering(date, filename, linefeed="<br>"):
     outline = ""
     sum = []
@@ -74,7 +76,7 @@ def getLogMetering(date, filename, linefeed="<br>"):
     outline = outline + "Total day:" + str (dsum)
     return outline
 
-
+# get unique date part existing in file (first word in line)
 def getLogDates(filename):
     dateslist = []
     # datesdictlist = []
@@ -90,6 +92,11 @@ def getLogDates(filename):
     dateslist.sort(reverse=True)  # fresh dates first
     return dateslist
 
+def getSchedule():
+    filename = dirpath + 'schedule.html'
+    with open(filename,"r") as f:
+        content = f.read()
+    return content
 
 app = Flask(__name__)
 
@@ -104,14 +111,15 @@ def index(body="", title="Home"):
         {'caption': 'Control Log', 'href': url_for('control_log')}
 
     ]
+    if body == "":              # if homepage
+        body = getSchedule()
     outline = render_template('webapp-index.tmpl', navigation=menulist, body=body, title=title) + "<br>"
     return outline
 
 @app.route('/schedule')
 def schedule():
-    filename = dirpath + 'schedule.html'
-    with open(filename,"r") as f:
-        content = f.read()
+
+    content = getSchedule()
     outline = index(content, "Schedule")
     return outline
 
