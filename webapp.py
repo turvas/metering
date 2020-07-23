@@ -16,14 +16,42 @@ def setDirPath():
     else:  # windows
         return dirpath
 
+# True if string can be converted to int
+def isInt(value):
+    try:
+        int(value)
+        return True
+    except ValueError:
+        return False
 
-def getLogRecords(date, linefeed="<br>"):
+def getLogRecords(date, changesOnly=True, linefeed="<br>"):
     outline = ""
     fn = dirpath + logfile
+    lastaction = ""
+    lastactions = []
+    for i in range(0,32):
+        lastactions.append("")
     with open(fn, 'r') as f:
         for line in f:  # read by line
             if date in line:
-                outline = outline + line + linefeed
+                if changesOnly:
+                    linelen = len(line)
+                    action = line[24:linelen-1]
+                    relay = line[linelen-3:linelen-1]    # 2 last digits
+                    if isInt(relay):
+                        relaynum = int(relay)
+                    else:
+                        relaynum = 0
+                    if relaynum > 0:            # if relay action
+                        if action != lastactions[relaynum]:
+                            lastactions[relaynum] = action
+                            outline = outline + line + linefeed
+                    else:                      # not relay action
+                        if action != lastaction:
+                            lastaction = action
+                            outline = outline + line + linefeed
+                else:   # all lines
+                    outline = outline + line + linefeed
     return outline
 
 def getLogMetering(date, filename, linefeed="<br>"):
