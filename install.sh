@@ -10,6 +10,10 @@ sudo cp control.service /etc/systemd/system/control.service
 sudo systemctl start control
 sudo systemctl enable control
 
+sudo cp webapp.service /etc/systemd/system/webapp.service
+sudo systemctl start webapp
+sudo systemctl enable webapp
+
 # sharing logs directory with web/apache
 sudo apt install apache2 -y
 cd /var/www/html
