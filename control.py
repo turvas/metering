@@ -242,6 +242,7 @@ def controlRelay(gpioPIN, scheduleOpen, hr=-1):
         logger(hrs + " stay connected relay " + str(gpioPIN))
         relay.on()  # positive releases realy back to free state
         activityLED.on()  # reversed, this means off !
+    time.sleep(1)  # seconds
 
 # used by scheduler, iterates all relays/schedules
 def processRelays():
