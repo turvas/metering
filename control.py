@@ -236,11 +236,11 @@ def controlRelay(gpioPIN, scheduleOpen, hr=-1):
     relay = LED(gpioPIN)
     if scheduleOpen[hr] == True:  # activate relay => disconnect load by relay
         logger(hrs + " opening relay " + str(gpioPIN))
-        relay.on()  # disconnect load
+        relay.off()  # disconnect load, with driving output to low - trigger relay
         activityLED.off()  # reversed, this means on !
     else:
         logger(hrs + " stay connected relay " + str(gpioPIN))
-        relay.off()
+        relay.on()  # positive releases realy back to free state
         activityLED.on()  # reversed, this means off !
 
 # used by scheduler, iterates all relays/schedules
