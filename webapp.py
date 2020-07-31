@@ -100,6 +100,40 @@ def getSchedule():
 
 app = Flask(__name__)
 
+# picks last N events based on same timestamp
+def getRelayStates():
+    fn = dirpath + logfile
+    lasttime = ""
+    lastlines = []
+    N = 10
+    dtlen = 19
+    with open(fn, 'r') as f:
+        for line in (f.readlines() [-N:]):   # read last N line
+            if "relay" in line:
+                if len(lasttime) == 0:  # first time
+                    lasttime = line[0:dtlen]
+                else:
+                    thistime = line[0:dtlen]
+                    if thistime == lasttime:
+                        lastlines.append(line)
+                    else:
+                        lasttime = thistime
+                        lastlines = [line]
+    # <p style="background-color:red;">A red paragraph.</p>
+    html = ''
+    for line in lastlines:
+        # 2020-07-31 23:30:50  23 unpowering boiler2, relay GPIO: 27
+        html += '<p style="background-color:'
+        if "unpower" in line:
+            html += "red"
+        else:
+            html += "green"
+        load = line.split()[4]
+        rest = line.split(',')[1]
+        txt = load + rest
+        html += ';">'+txt+'</p>'
+    html += '<br>'
+    return html
 
 @app.route('/')
 def index(body="", title="Home"):
@@ -112,7 +146,8 @@ def index(body="", title="Home"):
 
     ]
     if body == "":              # if homepage
-        body = getSchedule()
+        body = getRelayStates()
+        body += getSchedule()
     outline = render_template('webapp-index.tmpl', navigation=menulist, body=body, title=title) + "<br>"
     return outline
 

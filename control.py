@@ -226,8 +226,9 @@ def createSchedules():
 
 # default relay is (fail-)closed, connected.
 # if needed to save power, (most of time), it will be opened/disconnected
-def controlRelay(gpioPIN, scheduleOpen, relay, hr=-1):
+def controlRelay(load, scheduleOpen, relay, hr=-1):
     global activityLED
+    gpioPIN = load["gpioPin"]
     if hr == -1:  # not simulation/testing
         now = datetime.datetime.now()
         hrs = now.strftime("%H")  # string, hour 24h, localtime, not 0 padded
@@ -236,11 +237,11 @@ def controlRelay(gpioPIN, scheduleOpen, relay, hr=-1):
         hrs = str(hr)
     #relay = LED(gpioPIN)
     if scheduleOpen[hr] == True:  # activate relay => disconnect load by relay
-        logger(hrs + " opening relay " + str(gpioPIN))
+        logger(hrs + " unpowering "+load["name"] +", relay GPIO: "+ str(gpioPIN))
         relay.off()  # disconnect load, with driving output to low - trigger relay
         activityLED.off()  # reversed, this means on !
     else:
-        logger(hrs + " stay connected relay " + str(gpioPIN))
+        logger(hrs + " powering "+load["name"] +", relay GPIO: "+ str(gpioPIN))
         relay.on()  # positive releases realy back to free state
         activityLED.on()  # reversed, this means off !
     #time.sleep(1)  # seconds
@@ -249,7 +250,7 @@ def controlRelay(gpioPIN, scheduleOpen, relay, hr=-1):
 def processRelays():
     i = 0
     for load in loads:
-        controlRelay(load["gpioPin"], schedules[i], relays[i])  # assumes schedules order is not modified
+        controlRelay(load, schedules[i], relays[i])  # assumes schedules order is not modified
         i += 1
 
 # downloads file for tomorrow and creates schedules
