@@ -29,10 +29,11 @@ htmlfile = "schedule.html"
 hinnad = []  # list 24, kwh cost by hr
 schedules = []  # list of schedules (which are lists)
 # power kW, consumption in Kwh, hrStart2 in 24h system
-relays = [
+loads = [
     {'name': 'boiler1', 'gpioPin': 17, 'power': 2, 'daily_consumption': 7, 'hrStart2': 15, 'consumption2': 1},
     {'name': 'boiler2', 'gpioPin': 27, 'power': 2, 'daily_consumption': 7, 'hrStart2': 15, 'consumption2': 1}
 ]
+relays = []
 # in shell
 # echo none | sudo tee /sys/class/leds/led0/trigger
 # echo gpio | sudo tee /sys/class/leds/led1/trigger
@@ -215,17 +216,17 @@ def createSchedule2(power, daily_consumption, prices, hrStart2, consumption2):
 # returns count
 def createSchedules():
     global schedules
-    for relay in relays:
-        schedule0 = createSchedule2(relay["power"], relay["daily_consumption"], hinnad,
-                                    relay["hrStart2"], relay["consumption2"])
+    for heater in loads:
+        schedule0 = createSchedule2(heater["power"], heater["daily_consumption"], hinnad,
+                                    heater["hrStart2"], heater["consumption2"])
         schedules.append(schedule0)
-        logger(relay['name'] + ": " + str(schedule0))
+        logger(heater['name'] + ": " + str(schedule0))
     return len(schedules)
 
 
 # default relay is (fail-)closed, connected.
 # if needed to save power, (most of time), it will be opened/disconnected
-def controlRelay(gpioPIN, scheduleOpen, hr=-1):
+def controlRelay(gpioPIN, scheduleOpen, relay, hr=-1):
     global activityLED
     if hr == -1:  # not simulation/testing
         now = datetime.datetime.now()
@@ -233,7 +234,7 @@ def controlRelay(gpioPIN, scheduleOpen, hr=-1):
         hr = int(hrs)
     else:  # simulation/testing
         hrs = str(hr)
-    relay = LED(gpioPIN)
+    #relay = LED(gpioPIN)
     if scheduleOpen[hr] == True:  # activate relay => disconnect load by relay
         logger(hrs + " opening relay " + str(gpioPIN))
         relay.off()  # disconnect load, with driving output to low - trigger relay
@@ -242,18 +243,22 @@ def controlRelay(gpioPIN, scheduleOpen, hr=-1):
         logger(hrs + " stay connected relay " + str(gpioPIN))
         relay.on()  # positive releases realy back to free state
         activityLED.on()  # reversed, this means off !
-    time.sleep(1)  # seconds
+    #time.sleep(1)  # seconds
 
 # used by scheduler, iterates all relays/schedules
 def processRelays():
     i = 0
-    for relay in relays:
-        controlRelay(relay["gpioPin"], schedules[i])  # assumes schedules order is not modified
+    for load in loads:
+        controlRelay(load["gpioPin"], schedules[i], relays[i])  # assumes schedules order is not modified
         i += 1
 
 # downloads file for tomorrow and creates schedules
 def dailyJob(firstRun=False):
-    global hinnad, htmlfile
+    global hinnad, htmlfile, relays
+    if firstRun == True:
+        for load in loads:
+            relay = LED(load["gpioPin"])    # init output objects for relays
+            relays.append(relay)
     #logger("downloadFile ..")
     ret = downloadFile(filename, firstRun)
     if ret == True:
@@ -263,7 +268,7 @@ def dailyJob(firstRun=False):
         hinnad = calcPrices(borsihinnad)
         #logger("createSchedules ..")
         n = createSchedules()
-        html = outputHTMLtable(schedules + [hinnad], relays+[{"name":"Prices"}]) # append last row with prices
+        html = outputHTMLtable(schedules + [hinnad], loads + [{"name": "Prices"}]) # append last row with prices
         htmlfile = dirpath + htmlfile
         with open(htmlfile, "w") as f:
             f.write(html)
