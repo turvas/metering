@@ -2,13 +2,13 @@
 import datetime
 import os
 import sys  # for translate
+import glob  # for file matching
 import string
 from flask import Flask, url_for, render_template
 from flask import request
 
-dirpath = ""
+dirpath = "./"
 logfile = "control.log"
-
 
 # by ChrisP from https://stackoverflow.com/questions/92438/stripping-non-printable-characters-from-a-string-in-python
 # build a table mapping all non-printable characters to None
@@ -16,11 +16,13 @@ NOPRINT_TRANS_TABLE = {
     i: None for i in range(0, sys.maxunicode + 1) if not chr(i).isprintable()
 }
 
+
 def make_printable(s):
     """Replace non-printable characters in a string."""
     # the translate method on str removes characters
     # that map to None from the string
     return s.translate(NOPRINT_TRANS_TABLE)
+
 
 # sets OS dependent directory
 def setDirPath():
@@ -30,6 +32,7 @@ def setDirPath():
     else:  # windows
         return dirpath
 
+
 # True if string can be converted to int
 def isInt(value):
     try:
@@ -38,63 +41,66 @@ def isInt(value):
     except ValueError:
         return False
 
+
 # from control log
 def getLogRecords(date, changesOnly=True, linefeed="<br>"):
     outline = ""
     fn = dirpath + logfile
     lastaction = ""
     lastactions = []
-    for i in range(0,32):       # for relays indepenent tracking
+    for i in range(0, 32):  # for relays indepenent tracking
         lastactions.append("")
     with open(fn, 'r') as f:
         for line in f:  # read by line
             if date in line:
                 if changesOnly:
                     linelen = len(line)
-                    action = line[24:linelen-1]
-                    relay = line[linelen-3:linelen-1]    # 2 last digits
+                    action = line[24:linelen - 1]
+                    relay = line[linelen - 3:linelen - 1]  # 2 last digits
                     if isInt(relay):
                         relaynum = int(relay)
                     else:
                         relaynum = 0
-                    if relaynum > 0:            # if relay action
+                    if relaynum > 0:  # if relay action
                         if action != lastactions[relaynum]:
                             lastactions[relaynum] = action
                             outline = outline + line + linefeed
-                    else:                      # not relay action
+                    else:  # not relay action
                         if action != lastaction:
                             lastaction = action
                             outline = outline + line + linefeed
-                else:   # all lines
+                else:  # all lines
                     outline = outline + line + linefeed
     return outline
+
 
 # aggregates hourly readings and daily sum
 def getLogMetering(date, filename, linefeed="<br>"):
     outline = ""
     sum = []
     dsum = 0
-    for i in range(0,24):   # fill with 0
+    for i in range(0, 24):  # fill with 0
         sum.append(0)
     fn = dirpath + filename
     with open(fn, 'r') as f:
         for line in f:  # read by line
             if date in line:
-                line1 = line.strip()         # remove linefeed from end, sometimes spaces in beginning
+                line1 = line.strip()  # remove linefeed from end, sometimes spaces in beginning
                 line = make_printable(line1)
                 strlen = len(line)
                 try:
                     hrstr = line[9:11]
-                    hr = int(hrstr)          # last not included
-                    pulses = line[18:strlen]    # last char is linefeed, tody verify str lengt
+                    hr = int(hrstr)  # last not included
+                    pulses = line[18:strlen]  # last char is linefeed, tody verify str lengt
                     sum[hr] += int(pulses)
                 except:
-                    print(fn+", line:"+line+", hr:"+hrstr)
+                    print(fn + ", line:" + line + ", hr:" + hrstr)
     for hr in range(0, 24):
         outline = outline + str(hr) + ": " + str(sum[hr]) + linefeed
         dsum += sum[hr]
-    outline = outline + "Total day:" + str (dsum)
+    outline = outline + "Total day:" + str(dsum)
     return outline
+
 
 # get unique date part existing in file (first word in line)
 def getLogDates(filename):
@@ -103,7 +109,7 @@ def getLogDates(filename):
     fn = dirpath + filename
     with open(fn, 'r') as f:
         for line in f:  # read by line
-            pos = line.find(" ")    # date boundary
+            pos = line.find(" ")  # date boundary
             date = line[0:pos]
             if date not in dateslist:
                 dateslist.append(date)
@@ -112,13 +118,26 @@ def getLogDates(filename):
     dateslist.sort(reverse=True)  # fresh dates first
     return dateslist
 
+
+def getFiles(pattern):
+    '''return list of files matching pattern'''
+
+    files = []
+    os.chdir(dirpath)
+    for file in glob.glob(pattern):
+        files.append(file)
+    return files
+
+
 def getSchedule():
     filename = dirpath + 'schedule.html'
-    with open(filename,"r") as f:
+    with open(filename, "r") as f:
         content = f.read()
     return content
 
+
 app = Flask(__name__)
+
 
 # picks last N events based on same timestamp
 def getRelayStates():
@@ -128,7 +147,7 @@ def getRelayStates():
     N = 10
     dtlen = 19
     with open(fn, 'r') as f:
-        for line in (f.readlines() [-N:]):   # read last N line
+        for line in (f.readlines()[-N:]):  # read last N line
             if "relay" in line:
                 if len(lasttime) == 0:  # first time
                     lasttime = line[0:dtlen]
@@ -151,9 +170,10 @@ def getRelayStates():
         load = line.split()[4]
         rest = line.split(',')[1]
         txt = load + rest
-        html += ';">'+txt+'</p>'
+        html += ';">' + txt + '</p>'
     html += '<br>'
     return html
+
 
 @app.route('/')
 def index(body="", title="Home"):
@@ -165,15 +185,15 @@ def index(body="", title="Home"):
         {'caption': 'Control Log', 'href': url_for('control_log')}
 
     ]
-    if body == "":              # if homepage
+    if body == "":  # if homepage
         body = getRelayStates()
         body += getSchedule()
     outline = render_template('webapp-index.tmpl', navigation=menulist, body=body, title=title) + "<br>"
     return outline
 
+
 @app.route('/schedule')
 def schedule():
-
     content = getSchedule()
     outline = index(content, "Schedule")
     return outline
@@ -194,22 +214,25 @@ def control_log():
     outline = index(outline, "Control Log")
     return outline
 
+
 @app.route('/metering', methods=['GET', 'POST'])
 def metering():
     if request.method == 'POST':  # in not first time
         date = request.form['date']
+        meteringfile = request.form['file']
     else:
         now = datetime.datetime.now()
         date = now.strftime("%Y-%m-%d")
+        meteringfile = "pulses-boiler-2020-07.txt"
 
-    meteringfile="pulses-boiler-2020-07.txt"
-
+    meteringfiles = getFiles("pulses-*.txt")
     dateslist = getLogDates(meteringfile)
-    outline = render_template('webapp-contol-log.tmpl', dates=dateslist, file=meteringfile, date=date) + "<br>"
+    outline = render_template('webapp-metering-log.tmpl', dates=dateslist, file=meteringfile, date=date, files=meteringfiles) + "<br>"
 
     outline = outline + getLogMetering(date, meteringfile)
     outline = index(outline, "Metering aggregation")
     return outline
+
 
 if __name__ == '__main__':
     setDirPath()

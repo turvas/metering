@@ -1,0 +1,22 @@
+
+{% block content %}
+  <p class="important">
+
+    <form method="post">
+        Select file and date to show:
+        <select id="file" name="file">
+            {% for item in files %}
+                <option value="{{ item }}"{% if item == file %} selected{% endif %}>{{ item }}</option>
+            {% endfor %}
+        </select>
+        <select id="date" name="date">
+            {% for item in dates %}
+                <option value="{{ item }}"{% if item == date %} selected{% endif %}>{{ item }}</option>
+            {% endfor %}
+        </select>
+
+        <input type="submit" value="Apply">
+    </form>
+    <br>
+    Displaying logs for {{ file }}, date: {{ date }}
+{% endblock %}
