@@ -1,12 +1,26 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 import datetime
 import os
+import sys  # for translate
+import string
 from flask import Flask, url_for, render_template
 from flask import request
 
 dirpath = ""
 logfile = "control.log"
 
+
+# by ChrisP from https://stackoverflow.com/questions/92438/stripping-non-printable-characters-from-a-string-in-python
+# build a table mapping all non-printable characters to None
+NOPRINT_TRANS_TABLE = {
+    i: None for i in range(0, sys.maxunicode + 1) if not chr(i).isprintable()
+}
+
+def make_printable(s):
+    """Replace non-printable characters in a string."""
+    # the translate method on str removes characters
+    # that map to None from the string
+    return s.translate(NOPRINT_TRANS_TABLE)
 
 # sets OS dependent directory
 def setDirPath():
@@ -66,10 +80,16 @@ def getLogMetering(date, filename, linefeed="<br>"):
     with open(fn, 'r') as f:
         for line in f:  # read by line
             if date in line:
+                line1 = line.strip()         # remove linefeed from end, sometimes spaces in beginning
+                line = make_printable(line1)
                 strlen = len(line)
-                hr = int(line[9:11])          # last not included
-                pulses = line[18:strlen-1]    # last char is linefeed, tody verify str lengt
-                sum[hr] += int(pulses)
+                try:
+                    hrstr = line[9:11]
+                    hr = int(hrstr)          # last not included
+                    pulses = line[18:strlen]    # last char is linefeed, tody verify str lengt
+                    sum[hr] += int(pulses)
+                except:
+                    print(fn+", line:"+line+", hr:"+hrstr)
     for hr in range(0, 24):
         outline = outline + str(hr) + ": " + str(sum[hr]) + linefeed
         dsum += sum[hr]
