@@ -1,0 +1,4 @@
+schedule==0.6.0
+requests==2.24.0
+Flask==1.1.2
+gpiozero==1.5.1

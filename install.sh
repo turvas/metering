@@ -1,6 +1,7 @@
 #!/bin/bash
 
-pip install schedule requests
+pip install -r requirements.txt
+pip3 install -r requirements.txt
 
 sudo cp metering.service /etc/systemd/system/metering.service
 sudo systemctl start metering
