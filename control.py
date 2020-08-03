@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # used to control heating, boilers etc, based on lowest hourly energy prices
 # takes account expected energy need and average (over hr) used power
 # Copyright by turvas
@@ -10,6 +10,7 @@ import os
 import requests
 import schedule
 import signal
+from decimal import * # fix precision floating point
 # modules below might need manual install only in Windows
 from gpiozero import Device, LED
 # for Win testing
@@ -28,7 +29,7 @@ logfile = "control.log"
 htmlfile = "schedule.html"
 hinnad = []  # list 24, kwh cost by hr
 schedules = []  # list of schedules (which are lists)
-# power kW, consumption in Kwh, hrStart2 in 24h system
+# power kW, consumption in Kwh, hrStart2 in 24h system, if no zone2, then 'hrStart2': 24
 loads = [
     {'name': 'boiler1', 'gpioPin': 17, 'power': 2, 'daily_consumption': 9, 'hrStart2': 15, 'consumption2': 3},
     {'name': 'boiler2', 'gpioPin': 27, 'power': 2, 'daily_consumption': 9, 'hrStart2': 15, 'consumption2': 3}
@@ -38,8 +39,6 @@ relays = []
 # echo none | sudo tee /sys/class/leds/led0/trigger
 # echo gpio | sudo tee /sys/class/leds/led1/trigger
 activityLED = None  # /sys/class/leds/led0
-
-
 # power = None       # /sys/class/leds/led1    # power is hardwired on original Pi
 
 
@@ -82,7 +81,7 @@ def downloadFile(filename, firstRun=False):
         offset = time.altzone                               # is negative for positive timezone and in seconds
     else:
         offset = time.timezone
-    offset = offset / 3660                                  # in seconds -> hrs
+    offset = int(offset / 3600)                             # in seconds -> hrs (in python3 result would be float)
     hourInGMT = str(24 + offset)                            # works for GMT+3 at least (=21)
     utc_offset = str(0 - offset) + ":00"                    # because now.strftime("%z") not working on Win
     start = now.strftime("%Y-%m-%d")  # UTC time in URL, prognosis starts yesterday from period (which is today)
@@ -93,12 +92,12 @@ def downloadFile(filename, firstRun=False):
     uri = "&start=" + start + "+" + hourInGMT + "%3A00%3A00&end=" + end + "+" + hourInGMT + "%3A00%3A00&format=csv"
     url = baseurl + uri
     resp = requests.get(url, allow_redirects=True)  # type: Response
-    if resp.ok and len(resp.content) > 0:
-        open(filename, 'w').write(str(resp.content))
-        logger("File downloaded OK to " + filename + " using UTC offset " + utc_offset)
+    if resp.ok and len(resp.text) > 100:
+        open(filename, 'w', encoding="utf-8").write(resp.text)    # need encoding in py3
+        logger("File for "+ end +"(localtime) downloaded OK to " + filename + " using UTC offset " + utc_offset)
         ret = True
     else:
-        logger("ERROR: download of " + url + " failed!")
+        logger("ERROR: download of " + url + " failed!, response:"+str(resp.content))
         ret = False
     return ret
 
@@ -114,6 +113,7 @@ def isFloat(value):
 def readPrices(filename):
     borsihinnad = []
     with open(filename, "r") as f:
+        line = f.readline()     # header line
         for line in f:  # read by line
             items = line.split(";")
             if items[0] == 'ee':  # can be lv, lt, fi..
@@ -132,9 +132,11 @@ def calcPrices(borsihinnad):
     # global transahinnad, taastuvenergiatasu, ampritasu
     hr = 0
     hinnad = []
+    getcontext().prec = 4       # decimal precision
     for raw in borsihinnad:
-        hind = raw + transahinnad[hr] + taastuvenergiatasu + ampritasu
-        hinnad.append(hind)
+        hind0 = Decimal(raw + transahinnad[hr] + taastuvenergiatasu + ampritasu)
+        hind = hind0.quantize(Decimal('1.0000'))
+        hinnad.append(float(hind))
         hr += 1
     return hinnad
 
@@ -207,7 +209,7 @@ def createSchedule(power, daily_consumption, prices, hrStart=0, hrEnd=24):
 # out list of 24 (always), with True (open realy) or False (leave connected)
 def createSchedule2(power, daily_consumption, prices, hrStart2, consumption2):
     schedule0 = createSchedule(power, daily_consumption - consumption2, prices, 0, hrStart2 - 1)
-    schedule2 = createSchedule(power, consumption2, hinnad, hrStart2, 23)  # after cutover
+    schedule2 = createSchedule(power, consumption2, hinnad, hrStart2, 24)  # after cutover
     for hr in range(hrStart2, 24):
         schedule0[hr] = schedule2[hr]  # overwrite
     return schedule0
@@ -268,12 +270,15 @@ def dailyJob(firstRun=False):
         #logger("calcPrices ..")
         hinnad = calcPrices(borsihinnad)
         #logger("createSchedules ..")
-        n = createSchedules()
-        html = outputHTMLtable(schedules + [hinnad], loads + [{"name": "Prices"}]) # append last row with prices
-        htmlfile = dirpath + htmlfile
-        with open(htmlfile, "w") as f:
-            f.write(html)
-        logger("DailyJob run completed, created " + str(n) + " schedules")
+        if (len(hinnad) > 23):
+            n = createSchedules()
+            html = outputHTMLtable(schedules + [hinnad], loads + [{"name": "Prices"}]) # append last row with prices
+            htmlfile = dirpath + htmlfile
+            with open(htmlfile, "w") as f:
+                f.write(html)
+            logger("DailyJob run completed, created " + str(n) + " schedules")
+        else:
+            logger("DailyJob run completed with errors, no prices obtained")
     else:
         logger("DailyJob run completed, keeping existing schedules")
 
