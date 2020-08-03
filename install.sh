@@ -1,7 +1,7 @@
 #!/bin/bash
 
-pip install -r requirements.txt
-pip3 install -r requirements.txt
+sudo pip install -r requirements.txt
+sudo pip3 install -r requirements.txt
 
 sudo cp metering.service /etc/systemd/system/metering.service
 sudo systemctl start metering
