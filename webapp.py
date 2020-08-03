@@ -4,6 +4,8 @@ import os
 import sys  # for translate
 import glob  # for file matching
 import string
+import time
+
 from flask import Flask, url_for, render_template
 from flask import request
 
@@ -139,14 +141,15 @@ def getSchedule():
 app = Flask(__name__)
 
 
-# picks last N events based on same timestamp
+# picks from control logfile last N events based on same timestamp
+# return html formatted color coded states
 def getRelayStates():
     fn = dirpath + logfile
     lasttime = ""
     lastlines = []
     N = 10
     dtlen = 19
-    with open(fn, 'r') as f:
+    with open(fn, 'r') as f:    # find N last lines based on same timestamp
         for line in (f.readlines()[-N:]):  # read last N line
             if "relay" in line:
                 if len(lasttime) == 0:  # first time
@@ -159,18 +162,18 @@ def getRelayStates():
                         lasttime = thistime
                         lastlines = [line]
     # <p style="background-color:red;">A red paragraph.</p>
-    html = ''
+    html = 'Click on buttons to change state for current hour:'
     for line in lastlines:
         # 2020-07-31 23:30:50  23 unpowering boiler2, relay GPIO: 27
-        html += '<p style="background-color:'
+        load = line.split()[4]
+        rest = line.split(',')[1]
+        txt = load + rest
+        html += '<button type="button" onclick="location.href=\'/toggle?load=' + load + '\';" style="background-color:'
         if "unpower" in line:
             html += "red"
         else:
             html += "green"
-        load = line.split()[4]
-        rest = line.split(',')[1]
-        txt = load + rest
-        html += ';">' + txt + '</p>'
+        html += ';">' + txt + '</button>'
     html += '<br>'
     return html
 
@@ -191,6 +194,14 @@ def index(body="", title="Home"):
     outline = render_template('webapp-index.tmpl', navigation=menulist, body=body, title=title) + "<br>"
     return outline
 
+@app.route('/toggle')
+def toggle():
+    load = request.args.get('load', '')
+    fn = dirpath + "web.control"
+    with open(fn, 'w') as f:
+        f.write(load+" toggle ")
+    time.sleep(3)   # wait till control app makes change, so next index page can process new states
+    return index()
 
 @app.route('/schedule')
 def schedule():

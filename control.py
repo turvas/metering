@@ -6,6 +6,7 @@
 import datetime
 import time
 import os
+import os.path
 # manually install all below: pip install requests
 import requests
 import schedule
@@ -282,6 +283,37 @@ def dailyJob(firstRun=False):
     else:
         logger("DailyJob run completed, keeping existing schedules")
 
+def FindLoad(load_name):
+    loadcount = len(loads)
+    for i in range(loadcount):
+        if load_name == loads[i]["name"]:
+            return i
+    return -1   # not found
+
+def process_web_commands():
+    fn = dirpath + "web.control"
+    if os.path.isfile(fn):
+        with open(fn, 'r') as f:
+            for line in f:
+                # boiler1, toggle
+                load_name = line.split(',')[0]   # there is "," after load name
+                command = line.split()[1]
+                load_index = FindLoad(load_name)
+                if load_index > -1: # found
+                    #scheduleTmp = []
+                    if command == 'toggle':
+                        now = datetime.datetime.now()
+                        hrs = now.strftime("%H")  # string, hour 24h, localtime, not 0 padded
+                        hr = int(hrs)
+                        curstate = schedules[load_index][hr]
+                        if curstate == True:
+                            schedules[load_index][hr] = False
+                        else:
+                            schedules[load_index][hr] = True
+                        #for hr in range(24):  # fill with disconnected state all time (save power)
+                    #    scheduleTmp.append(True)
+                    controlRelay(loads[load_index], schedules[load_index], relays[load_index])
+        os.remove(fn)
 # by Mayank Jaiswal
 # from https://stackoverflow.com/questions/18499497/how-to-process-sigterm-signal-gracefully
 class GracefulKiller:
@@ -312,6 +344,7 @@ def main():
     #logger("prepare schedules..")
     schedule.every(5).minutes.do(processRelays)
     schedule.every(3).seconds.do(blinkLed)  # heartbeat 1:2 suhtega
+    schedule.every().second.do(process_web_commands)
     schedule.every().day.at("23:58").do(dailyJob)  # pisut enne uue paeva algust
     #logger("create GracefulKiller..")
     killer = GracefulKiller()
