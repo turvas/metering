@@ -95,7 +95,7 @@ def downloadFile(filename, firstRun=False):
     resp = requests.get(url, allow_redirects=True)  # type: Response
     if resp.ok and len(resp.text) > 100:
         open(filename, 'w', encoding="utf-8").write(resp.text)    # need encoding in py3
-        logger("File for "+ end +"(localtime) downloaded OK to " + filename + " using UTC offset " + utc_offset)
+        logger("File for "+ end +"(localtime) downloaded OK to " + filename + " using UTC offset " + utc_offset + " fr=" + str(firstRun))
         ret = True
     else:
         logger("ERROR: download of " + url + " failed!, response:"+str(resp.content))
