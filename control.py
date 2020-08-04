@@ -25,7 +25,7 @@ taastuvenergiatasu = 15.6 / (24 * 30)  # 0.02     # tunni kohta arvutatud (1400 
 ampritasu = 14.46 / (24 * 30)  # 0.02    # kuutasu jagatud tunni peale (25A)
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
 dirpath = ""  # subject to cange, depending OS
-filename = "nps-export.csv"  # subject to dir prepend
+file_name = "nps-export.csv"  # subject to dir prepend
 logfile = "control.log"
 htmlfile = "schedule.html"
 hinnad = []  # list 24, kwh cost by hr
@@ -174,7 +174,7 @@ def outputHTMLtable(rows, rownames, header=[]):
         for i in range(0, count):
             header.append(i)
     html += outputHTMLtabRow(["Hours:"] + header, True)                       # one empty cell in beginning
-    for i in range(0, len(rows)):
+    for i in range(len(rows)):
         html += outputHTMLtabRow([rownames[i]["name"]] + rows[i])    # create list from name string, to concatenate lists
     html += '</table>' + "\n"
     return html
@@ -256,6 +256,20 @@ def processRelays():
         controlRelay(load, schedules[i], relays[i])  # assumes schedules order is not modified
         i += 1
 
+def calc_filename(filename, firstRun = False):
+    '''calculates filename for tomorrows date'''
+
+    now = datetime.datetime.now()
+    if firstRun:  # wind back time by 1 day, as we need today-s
+        now -= datetime.timedelta(1)
+    tomorrow = now + datetime.timedelta(1)  # add 1 day
+    end = tomorrow.strftime("%Y-%m-%d")
+
+    fnl = len(filename)
+    fn = filename[0:fnl-4]
+    fn += "-" + end + ".csv"
+    return fn
+
 # downloads file for tomorrow and creates schedules
 def dailyJob(firstRun=False):
     global hinnad, htmlfile, relays
@@ -264,6 +278,7 @@ def dailyJob(firstRun=False):
             relay = LED(load["gpioPin"])    # init output objects for relays
             relays.append(relay)
     #logger("downloadFile ..")
+    filename = calc_filename(file_name, firstRun)
     ret = downloadFile(filename, firstRun)
     if ret == True:
         #logger("readPrices ..")
@@ -332,10 +347,10 @@ class GracefulKiller:
 
 
 def main():
-    global filename
+    global file_name
     logger("init control..")
     setDirPath()
-    filename = dirpath + filename  # prepend dir to original name
+    file_name = dirpath + file_name  # prepend dir to original name
 
     #logger("dailyJob..")
     dailyJob(True)  # first time to load today-s prices
