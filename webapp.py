@@ -121,13 +121,14 @@ def getLogDates(filename):
     return dateslist
 
 
-def getFiles(pattern):
-    '''return list of files matching pattern'''
+def getFiles(pattern: str):
+    ''':returns reverse sorted list of files (most recent first) matching pattern'''
 
     files = []
     os.chdir(dirpath)
     for file in glob.glob(pattern):
         files.append(file)
+    files.sort(reverse=True)
     return files
 
 
@@ -235,15 +236,15 @@ def control_log():
 
 @app.route('/metering', methods=['GET', 'POST'])
 def metering():
-    if request.method == 'POST':  # in not first time
+    meteringfiles = getFiles("pulses-*.txt")
+    if request.method == 'POST':        # in not first time
         date = request.form['date']
         meteringfile = request.form['file']
-    else:
+    else:                               # first time
         now = datetime.datetime.now()
         date = now.strftime("%Y-%m-%d")
-        meteringfile = "pulses-boiler-2020-07.txt"
+        meteringfile = meteringfiles[0] # assume there is at least 1 file
 
-    meteringfiles = getFiles("pulses-*.txt")
     dateslist = getLogDates(meteringfile)
     outline = render_template('webapp-metering-log.tmpl', dates=dateslist, file=meteringfile, date=date, files=meteringfiles) + "<br>"
 
