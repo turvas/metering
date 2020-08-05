@@ -11,7 +11,7 @@ import os.path
 import requests
 import schedule
 import signal
-from decimal import * # fix precision floating point
+from decimal import *  # fix precision floating point
 # modules below might need manual install only in Windows
 from gpiozero import Device, LED
 # for Win testing
@@ -28,7 +28,7 @@ dirpath = ""  # subject to cange, depending OS
 file_name = "nps-export.csv"  # subject to dir prepend
 logfile = "control.log"
 htmlfile = "schedule.html"
-hinnad = []  # list 24, kwh cost by hr
+prices = []  # list 24, kwh cost by hr
 schedules = []  # list of schedules (which are lists)
 # power kW, consumption in Kwh, hrStart2 in 24h system, if no zone2, then 'hrStart2': 24
 loads = [
@@ -39,22 +39,25 @@ relays = []
 # in shell
 # echo none | sudo tee /sys/class/leds/led0/trigger
 # echo gpio | sudo tee /sys/class/leds/led1/trigger
-activityLED = None  # /sys/class/leds/led0
-# power = None       # /sys/class/leds/led1    # power is hardwired on original Pi
+activityLED: LED  # /sys/class/leds/led0
 
 
-# log to logfile and screen
-def logger(msg, output="both"):
+# powerLED: LED       # /sys/class/leds/led1    # power is hardwired on original Pi
+
+
+def logger(msg: str, output="both"):
+    """log to logfile and screen"""
     now = datetime.datetime.now()
     line = now.strftime("%Y-%m-%d %H:%M:%S %z") + " " + msg + "\n"
-    print(line)
-    with open(dirpath + logfile, 'a') as f:
-        f.write(line)
+    if output == "both":
+        print(line)
+        with open(dirpath + logfile, 'a') as f:
+            f.write(line)
 
 
-# sets OS dependent directory
-def setDirPath():
-    global dirpath, power, activityLED
+def set_dir_path():
+    """sets OS dependent directory,  . for win, /var/metering for ux"""
+    global dirpath, activityLED
     if os.name == 'posix':
         dirpath = "/var/metering/"
         os.system('echo none | sudo tee /sys/class/leds/led0/trigger')
@@ -65,75 +68,79 @@ def setDirPath():
     return dirpath
 
 
-# blink/toggle system LED for 1 sec
-def blinkLed():
+def blink_led():
+    """blink/toggle system LED for 1 sec"""
     activityLED.toggle()
     time.sleep(1)
     activityLED.toggle()
 
 
-# filename to save
-# returns True, if success
-def downloadFile(filename, firstRun=False):
+def download_file(filename: str, first_run=False):
+    """:returns: True, if success
+    :param filename to save,
+    :param first_run: if True, todays prices are loaded"""
     now = datetime.datetime.now()
-    if firstRun:  # wind back time by 1 day, as we need today-s prices
+    if first_run:  # wind back time by 1 day, as we need today-s prices
         now -= datetime.timedelta(1)
-    if time.daylight and time.localtime().tm_isdst > 0:     # consider DST,
-        offset = time.altzone                               # is negative for positive timezone and in seconds
+    if time.daylight and time.localtime().tm_isdst > 0:  # consider DST,
+        offset = time.altzone  # is negative for positive timezone and in seconds
     else:
         offset = time.timezone
-    offset = int(offset / 3600)                             # in seconds -> hrs (in python3 result would be float)
-    hourInGMT = str(24 + offset)                            # works for GMT+3 at least (=21)
-    utc_offset = str(0 - offset) + ":00"                    # because now.strftime("%z") not working on Win
+    offset = int(offset / 3600)  # in seconds -> hrs (in python3 result would be float)
+    hour_in_gmt = str(24 + offset)  # works for GMT+3 at least (=21)
+    utc_offset = str(0 - offset) + ":00"  # because now.strftime("%z") not working on Win
     start = now.strftime("%Y-%m-%d")  # UTC time in URL, prognosis starts yesterday from period (which is today)
     tomorrow = now + datetime.timedelta(1)  # add 1 day
     end = tomorrow.strftime("%Y-%m-%d")
     # &start=2020-04-12+21:00:00&end=2020-04-13+21:00:00&format=csv
     # &start=2020-04-12+21%3A00%3A00&end=2020-04-13+21%3A00%3A00&format=csv
-    uri = "&start=" + start + "+" + hourInGMT + "%3A00%3A00&end=" + end + "+" + hourInGMT + "%3A00%3A00&format=csv"
+    uri = "&start=" + start + "+" + hour_in_gmt + "%3A00%3A00&end=" + end + "+" + hour_in_gmt + "%3A00%3A00&format=csv"
     url = baseurl + uri
     resp = requests.get(url, allow_redirects=True)  # type: Response
     if resp.ok and len(resp.text) > 100:
-        open(filename, 'w', encoding="utf-8").write(resp.text)    # need encoding in py3
-        logger("File for "+ end +"(localtime) downloaded OK to " + filename + " using UTC offset " + utc_offset + " fr=" + str(firstRun))
+        open(filename, 'w', encoding="utf-8").write(resp.text)  # need encoding in py3
+        logger("File for " + end + "(localtime) downloaded OK to " + filename + " using UTC offset " + utc_offset +
+            " fr=" + str(first_run))
         ret = True
     else:
-        logger("ERROR: download of " + url + " failed!, response:"+str(resp.content))
+        logger("ERROR: download of " + url + " failed!, response:" + str(resp.content))
         ret = False
     return ret
 
-# True if string can be converted to float
-def isFloat(value):
+
+def is_float(value: str):
+    """:returns: True if string can be converted to float"""
     try:
         float(value)
         return True
     except ValueError:
         return False
 
-# out list of 24 elements, Eur/kwh
-def readPrices(filename):
+
+def read_prices(filename: str):
+    """:returns: list of 24 elements, Eur/kwh, based on filename"""
     borsihinnad = []
     with open(filename, "r") as f:
-        line = f.readline()     # header line
+        f.readline()  # header line
         for line in f:  # read by line
             items = line.split(";")
             if items[0] == 'ee':  # can be lv, lt, fi..
                 item2 = items[2]
                 hind1 = item2.replace("\n", "")  # last item contains CR
                 hind = hind1.replace(",", ".")  # input file uses Euro form of comma: ,
-                if isFloat(hind):  # excpt first line which is rowheads
-                    hindMW = float(hind)
-                    hindKW = hindMW / 1000
-                    borsihinnad.append(hindKW)
+                if is_float(hind):  # excpt first line which is rowheads
+                    hind_mw = float(hind)
+                    hind_kw = hind_mw / 1000
+                    borsihinnad.append(hind_kw)
     return borsihinnad
 
-# in list of 24 elements of borsihind
-# out list of 24 elements of real price, incl time sensitive trans, and other fix fees
-def calcPrices(borsihinnad):
-    # global transahinnad, taastuvenergiatasu, ampritasu
+
+def calc_prices(borsihinnad: list):
+    """:return: list of 24 elements of real price, incl time sensitive trans, and other fix fees,
+    :param borsihinnad list of 24 elements of borsihind"""
     hr = 0
     hinnad = []
-    getcontext().prec = 4       # decimal precision
+    getcontext().prec = 4  # decimal precision
     for raw in borsihinnad:
         hind0 = Decimal(raw + transahinnad[hr] + taastuvenergiatasu + ampritasu)
         hind = hind0.quantize(Decimal('1.0000'))
@@ -141,16 +148,18 @@ def calcPrices(borsihinnad):
         hr += 1
     return hinnad
 
-# creates html table row from list
-# cells background with value False are colored green
-def outputHTMLtabRow(list, isHeader=False):
+
+def output_html_table_row(columns: list, is_header=False):
+    """:returns: html table row from list elements, cells background with value False are colored green
+    :param columns list of column values,
+    :param is_header: if True then html table header marking is used"""
     html = "<tr>" + "\n"
-    if isHeader == True:
+    if is_header:
         tags = ["<th>", "</th>", "<th>"]
     else:
         tags = ['<td>', '</td>', '<td bgcolor="green">"']
-    for item in list:
-        if item == False:
+    for item in columns:
+        if not item:  # = False
             pos = 2
         else:  # default, no backgroundcolor
             pos = 0
@@ -158,10 +167,12 @@ def outputHTMLtabRow(list, isHeader=False):
     html += "</tr>" + "\n"
     return html
 
-# creates HTML table from list of lists, default with numbers as table headers
-# in rows - list of lists, typically schedules
-#    rownames - list of dictionaries, where "name" key is used for rowname
-def outputHTMLtable(rows, rownames, header=[]):
+
+def output_html_table(rows, rownames, header=[]):
+    """:return: HTML table from list of lists, default with numbers as table headers,
+    :param rows list of lists, typically schedules,
+    :param rownames list of dictionaries, where "name" key is used for rowname,
+    :param header: optional list of Header row contents"""
     count = len(rows[0])
     style = '<style> ' \
             'table, th, td {' \
@@ -173,55 +184,64 @@ def outputHTMLtable(rows, rownames, header=[]):
     if len(header) == 0:
         for i in range(0, count):
             header.append(i)
-    html += outputHTMLtabRow(["Hours:"] + header, True)                       # one empty cell in beginning
+    html += output_html_table_row(["Hours:"] + header, True)  # one empty cell in beginning
     for i in range(len(rows)):
-        html += outputHTMLtabRow([rownames[i]["name"]] + rows[i])    # create list from name string, to concatenate lists
+        html += output_html_table_row(
+            [rownames[i]["name"]] + rows[i])  # create list from name string, to concatenate lists
     html += '</table>' + "\n"
     return html
 
-# Price extractor for pricing dict item
-def getPrice(di):
+
+def get_price(di):
+    """Price extractor for pricing dict item"""
     return di['price']
 
-# in power kW (max. average/hr, not peak),
-#    daily_consumption kWh, prices list(24) in Eur
-# out list of 24 (default), with True (open realy) or False (leave connected)
-def createSchedule(power, daily_consumption, prices, hrStart=0, hrEnd=24):
-    priceDict = []
-    for hr in range(hrStart, hrEnd):  # prepare list of dictionary items for sorting
+
+def create_schedule(power, daily_consumption, hr_start=0, hr_end=24):
+    """:return: list of 24 (default), with True (open realy) or False (leave connected),
+    :param hr_end: end of schedule,
+    :param hr_start: beginning of schedule,
+    :param power kW (max. average/hr, not peak),
+    :param daily_consumption kWh"""
+    price_dict = []
+    for hr in range(hr_start, hr_end):  # prepare list of dictionary items for sorting
         di = {'hour': hr, 'price': prices[hr]}
-        priceDict.append(di)
-    priceDict.sort(key=getPrice)  # cheapest hours first
-    relayOpen = []
+        price_dict.append(di)
+    price_dict.sort(key=get_price)  # cheapest hours first
+    relay_open = []
     for hr in range(24):  # fill with disconnected state all time (save power)
-        relayOpen.append(True)
+        relay_open.append(True)
     i = consumed = 0
     while consumed < daily_consumption:  # iterate list sorted by cheap hours (relay load connected)
-        di = priceDict[i]
+        di = price_dict[i]
         hr = di['hour']
-        relayOpen[hr] = False
+        relay_open[hr] = False
         consumed += power
         i += 1
-    return relayOpen
+    return relay_open
 
-# prepares 2-zone schedule
-# hrStart2 - starining hr of zone2
-# consumption2 - during zone 2 (usually significantly less than daily_consumption)
-# out list of 24 (always), with True (open realy) or False (leave connected)
-def createSchedule2(power, daily_consumption, prices, hrStart2, consumption2):
-    schedule0 = createSchedule(power, daily_consumption - consumption2, prices, 0, hrStart2 - 1)
-    schedule2 = createSchedule(power, consumption2, hinnad, hrStart2, 24)  # after cutover
-    for hr in range(hrStart2, 24):
+
+def create_schedule2(power, daily_consumption, hr_start2, consumption2):
+    """prepares 2-zone schedule.
+    :param power: kW of load/heater
+    :param daily_consumption: kwh
+    :param hr_start2 starining hr of zone2,
+    :param consumption2 kWh during zone 2 (usually significantly less than daily_consumption),
+    :returns: list of 24 (always), with content of True (open realy) or False (leave connected)"""
+    schedule0 = create_schedule(power, daily_consumption - consumption2, 0, hr_start2 - 1)
+    schedule2 = create_schedule(power, consumption2, hr_start2, 24)  # after cutover
+    for hr in range(hr_start2, 24):
         schedule0[hr] = schedule2[hr]  # overwrite
     return schedule0
 
-# creates schedules for all relays
-# returns count
-def createSchedules():
+
+def create_schedules():
+    """creates schedules for all relays,
+    :returns: count of schedules """
     global schedules
     for heater in loads:
-        schedule0 = createSchedule2(heater["power"], heater["daily_consumption"], hinnad,
-                                    heater["hrStart2"], heater["consumption2"])
+        schedule0 = create_schedule2(heater["power"], heater["daily_consumption"],
+                                     heater["hrStart2"], heater["consumption2"])
         schedules.append(schedule0)
         logger(heater['name'] + ": " + str(schedule0))
     return len(schedules)
@@ -229,66 +249,70 @@ def createSchedules():
 
 # default relay is (fail-)closed, connected.
 # if needed to save power, (most of time), it will be opened/disconnected
-def controlRelay(load, scheduleOpen, relay, hr=-1):
+def control_relay(load, schedule_open, relay, hr=-1):
+    """sets proper state for load, relay, based on schedule, if hr is given, then executes as if hr has arrived"""
     global activityLED
-    gpioPIN = load["gpioPin"]
+    gpio_pin = load["gpioPin"]
     if hr == -1:  # not simulation/testing
         now = datetime.datetime.now()
         hrs = now.strftime("%H")  # string, hour 24h, localtime, not 0 padded
         hr = int(hrs)
     else:  # simulation/testing
         hrs = str(hr)
-    #relay = LED(gpioPIN)
-    if scheduleOpen[hr] == True:  # activate relay => disconnect load by relay
-        logger(hrs + " unpowering "+load["name"] +", relay GPIO: "+ str(gpioPIN))
+    # careful with log format change, "relay" and gpio pin positions are critical for webapp relay status display
+    if schedule_open[hr]:  # True, activate relay => disconnect load by relay
+        logger(hrs + " unpowering " + load["name"] + ", relay GPIO: " + str(gpio_pin))
         relay.off()  # disconnect load, with driving output to low - trigger relay
         activityLED.off()  # reversed, this means on !
     else:
-        logger(hrs + " powering "+load["name"] +", relay GPIO: "+ str(gpioPIN))
+        logger(hrs + " powering " + load["name"] + ", relay GPIO: " + str(gpio_pin))
         relay.on()  # positive releases realy back to free state
         activityLED.on()  # reversed, this means off !
-    #time.sleep(1)  # seconds
+    # time.sleep(1)  # seconds
 
-# used by scheduler, iterates all relays/schedules
-def processRelays():
+
+def process_relays():
+    """ iterates all relays/schedules, used by scheduler"""
     i = 0
     for load in loads:
-        controlRelay(load, schedules[i], relays[i])  # assumes schedules order is not modified
+        control_relay(load, schedules[i], relays[i])  # assumes schedules order is not modified
         i += 1
 
-def calc_filename(filename, firstRun = False):
-    '''calculates filename for tomorrows date'''
+
+def calc_filename(filename, first_run=False):
+    """calculates filename for tomorrows date"""
 
     now = datetime.datetime.now()
-    if firstRun:  # wind back time by 1 day, as we need today-s
+    if first_run:  # wind back time by 1 day, as we need today-s
         now -= datetime.timedelta(1)
     tomorrow = now + datetime.timedelta(1)  # add 1 day
     end = tomorrow.strftime("%Y-%m-%d")
 
     fnl = len(filename)
-    fn = filename[0:fnl-4]
+    fn = filename[0:fnl - 4]
     fn += "-" + end + ".csv"
     return fn
 
-# downloads file for tomorrow and creates schedules
-def dailyJob(firstRun=False):
-    global hinnad, htmlfile, relays
-    if firstRun == True:
+
+def daily_job(first_run=False):
+    """downloads file for tomorrow and creates schedules"""
+    global prices, htmlfile, relays
+    if first_run:
         for load in loads:
-            relay = LED(load["gpioPin"])    # init output objects for relays
+            relay = LED(load["gpioPin"])  # init output objects for relays
             relays.append(relay)
-    #logger("downloadFile ..")
-    filename = calc_filename(file_name, firstRun)
-    ret = downloadFile(filename, firstRun)
-    if ret == True:
-        #logger("readPrices ..")
-        borsihinnad = readPrices(filename)
-        #logger("calcPrices ..")
-        hinnad = calcPrices(borsihinnad)
-        #logger("createSchedules ..")
-        if (len(hinnad) > 23):
-            n = createSchedules()
-            html = outputHTMLtable(schedules + [hinnad], loads + [{"name": "Prices"}]) # append last row with prices
+    # logger("downloadFile ..")
+    filename = calc_filename(file_name, first_run)
+    ret = download_file(filename, first_run)
+    if ret:
+        # logger("readPrices ..")
+        borsihinnad = read_prices(filename)
+        # logger("calcPrices ..")
+        prices = calc_prices(borsihinnad)
+        # logger("createSchedules ..")
+        if len(prices) > 23:
+            n = create_schedules()
+            html = output_html_table(schedules + [prices], loads + [{"name": "Prices"}])  # append last row with prices
             htmlfile = dirpath + htmlfile
             with open(htmlfile, "w") as f:
                 f.write(html)
@@ -298,37 +322,43 @@ def dailyJob(firstRun=False):
     else:
         logger("DailyJob run completed, keeping existing schedules")
 
-def FindLoad(load_name):
+
+def find_load(load_name):
+    """find load object, based on name, returns index in list or -1 if not found"""
     loadcount = len(loads)
     for i in range(loadcount):
         if load_name == loads[i]["name"]:
             return i
-    return -1   # not found
+    return -1  # not found
+
 
 def process_web_commands():
+    """reads commands sent by webapp from file and executes relay control"""
     fn = dirpath + "web.control"
     if os.path.isfile(fn):
         with open(fn, 'r') as f:
             for line in f:
                 # boiler1, toggle
-                load_name = line.split(',')[0]   # there is "," after load name
+                load_name = line.split(',')[0]  # there is "," after load name
                 command = line.split()[1]
-                load_index = FindLoad(load_name)
-                if load_index > -1: # found
-                    #scheduleTmp = []
+                load_index = find_load(load_name)
+                if load_index > -1:  # found
+                    # scheduleTmp = []
                     if command == 'toggle':
                         now = datetime.datetime.now()
                         hrs = now.strftime("%H")  # string, hour 24h, localtime, not 0 padded
                         hr = int(hrs)
                         curstate = schedules[load_index][hr]
-                        if curstate == True:
+                        if curstate:  # = True
                             schedules[load_index][hr] = False
                         else:
                             schedules[load_index][hr] = True
-                        #for hr in range(24):  # fill with disconnected state all time (save power)
+                        # for hr in range(24):  # fill with disconnected state all time (save power)
                     #    scheduleTmp.append(True)
-                    controlRelay(loads[load_index], schedules[load_index], relays[load_index])
+                    control_relay(loads[load_index], schedules[load_index], relays[load_index])
         os.remove(fn)
+
+
 # by Mayank Jaiswal
 # from https://stackoverflow.com/questions/18499497/how-to-process-sigterm-signal-gracefully
 class GracefulKiller:
@@ -338,7 +368,7 @@ class GracefulKiller:
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
 
-    def exit_gracefully(self, signum, frame):
+    def exit_gracefully(self):  # , signum, frame
         logger("service stop signal")
         if os.name == 'posix':
             os.system("echo mmc0 | sudo tee/sys/class/leds/led0/trigger")  # restore override by us
@@ -349,24 +379,23 @@ class GracefulKiller:
 def main():
     global file_name
     logger("init control..")
-    setDirPath()
+    set_dir_path()
     file_name = dirpath + file_name  # prepend dir to original name
 
-    #logger("dailyJob..")
-    dailyJob(True)  # first time to load today-s prices
-    #logger("processRelays..")
-    processRelays()  # set proper state
-    #logger("prepare schedules..")
-    schedule.every(5).minutes.do(processRelays)
-    schedule.every(3).seconds.do(blinkLed)  # heartbeat 1:2 suhtega
-    schedule.every().second.do(process_web_commands)
-    schedule.every().day.at("23:58").do(dailyJob)  # pisut enne uue paeva algust
-    #logger("create GracefulKiller..")
+    # logger("dailyJob..")
+    daily_job(True)  # first time to load today-s prices
+    # logger("processRelays..")
+    process_relays()  # set proper state
+    # logger("prepare schedules..")
+    schedule.every(5).minutes.do(process_relays)
+    schedule.every(3).seconds.do(blink_led)  # heartbeat 1:2 suhtega
+    schedule.every().second.do(process_web_commands)  # webapp may trigger relays
+    schedule.every().day.at("23:58").do(daily_job)  # pisut enne uue paeva algust
+    # logger("create GracefulKiller..")
     killer = GracefulKiller()
     while not killer.kill_now:
         schedule.run_pending()
         time.sleep(1)  # seconds
-
     print("valmis, exit..")
 
 
