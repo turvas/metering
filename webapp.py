@@ -3,7 +3,6 @@ import datetime
 import os
 import sys  # for translate
 import glob  # for file matching
-import string
 import time
 
 from flask import Flask, url_for, render_template
@@ -26,8 +25,8 @@ def make_printable(s):
     return s.translate(NOPRINT_TRANS_TABLE)
 
 
-# sets OS dependent directory
-def setDirPath():
+def set_dir_path():
+    """:returns: and sets OS dependent directory"""
     global dirpath
     if os.name == 'posix':
         dirpath = "/var/metering/"
@@ -35,8 +34,8 @@ def setDirPath():
         return dirpath
 
 
-# True if string can be converted to int
-def isInt(value):
+def is_int(value: str):
+    """:returns: True if string can be converted to int"""
     try:
         int(value)
         return True
@@ -44,8 +43,9 @@ def isInt(value):
         return False
 
 
-# from control log
-def getLogRecords(date, changesOnly=True, linefeed="<br>"):
+#
+def get_log_records(date: str, changes_only=True, linefeed="<br>"):
+    """:returns: unique (by default) lines from control log"""
     outline = ""
     fn = dirpath + logfile
     lastaction = ""
@@ -55,11 +55,11 @@ def getLogRecords(date, changesOnly=True, linefeed="<br>"):
     with open(fn, 'r') as f:
         for line in f:  # read by line
             if date in line:
-                if changesOnly:
+                if changes_only:
                     linelen = len(line)
                     action = line[24:linelen - 1]
                     relay = line[linelen - 3:linelen - 1]  # 2 last digits
-                    if isInt(relay):
+                    if is_int(relay):
                         relaynum = int(relay)
                     else:
                         relaynum = 0
@@ -76,13 +76,14 @@ def getLogRecords(date, changesOnly=True, linefeed="<br>"):
     return outline
 
 
-# aggregates hourly readings and daily sum
-def getLogMetering(date, filename, linefeed="<br>"):
+#
+def get_metering_log(date, filename, linefeed="<br>"):
+    """:returns: multiline aggregated hourly readings and daily sum"""
     outline = ""
-    sum = []
+    total = []
     dsum = 0
     for i in range(0, 24):  # fill with 0
-        sum.append(0)
+        total.append(0)
     fn = dirpath + filename
     with open(fn, 'r') as f:
         for line in f:  # read by line
@@ -94,18 +95,18 @@ def getLogMetering(date, filename, linefeed="<br>"):
                     hrstr = line[9:11]
                     hr = int(hrstr)  # last not included
                     pulses = line[18:strlen]  # last char is linefeed, tody verify str lengt
-                    sum[hr] += int(pulses)
+                    total[hr] += int(pulses)
                 except:
                     print(fn + ", line:" + line + ", hr:" + hrstr)
     for hr in range(0, 24):
-        outline = outline + str(hr) + ": " + str(sum[hr]) + linefeed
-        dsum += sum[hr]
+        outline = outline + str(hr) + ": " + str(total[hr]) + linefeed
+        dsum += total[hr]
     outline = outline + "Total day:" + str(dsum)
     return outline
 
 
-# get unique date part existing in file (first word in line)
-def getLogDates(filename):
+def get_log_dates(filename: str):
+    """:returns: reverse sorted list unique date part existing in file (first word in line)"""
     dateslist = []
     # datesdictlist = []
     fn = dirpath + filename
@@ -121,9 +122,8 @@ def getLogDates(filename):
     return dateslist
 
 
-def getFiles(pattern: str):
-    ''':returns reverse sorted list of files (most recent first) matching pattern'''
-
+def get_files(pattern: str):
+    """:returns: reverse sorted list of files (most recent first) matching pattern"""
     files = []
     os.chdir(dirpath)
     for file in glob.glob(pattern):
@@ -132,36 +132,32 @@ def getFiles(pattern: str):
     return files
 
 
-def getSchedule():
-    filename = dirpath + 'schedule.html'
+def get_schedule(fn='schedule.html'):
+    """:returns schedule file contents"""
+    filename = dirpath + fn
     with open(filename, "r") as f:
         content = f.read()
     return content
 
 
-app = Flask(__name__)
-
-
-# picks from control logfile last N events based on same timestamp
-# return html formatted color coded states
-def getRelayStates():
+def get_relay_states():
+    """:return: html formatted color coded states,
+    picks from control logfile last N events based on same timestamp """
     fn = dirpath + logfile
-    lasttime = ""
     lastlines = []
-    N = 10
-    with open(fn, 'r') as f:    # find N last lines based on same timestamp
-        for line in (f.readlines()[-N:]):  # read last N line
+    with open(fn, 'r') as f:  # find N last lines based on same timestamp
+        for line in (f.readlines()[-10:]):  # read last 10 line
             # 2020-08-05 00:00:17 00 unpowering boiler1, relay GPIO: 17
             if "relay" in line:
-                #ll = len(line)
-                gpio = "GPIO: "+line[-3:-1]  # 2 chars from end, exclude newline
-                if len(lastlines) == 0:         # first time
-                    lastlines.append( line )
+                # ll = len(line)
+                gpio = "GPIO: " + line[-3:-1]  # 2 chars from end, exclude newline
+                if len(lastlines) == 0:  # first time
+                    lastlines.append(line)
                 else:
                     i = 0
                     found = False
-                    for l in lastlines:
-                        if gpio in l:           # new record for existing relay
+                    for lline in lastlines:
+                        if gpio in lline:  # new record for existing relay
                             lastlines[i] = line
                             found = True
                         i += 1
@@ -185,8 +181,14 @@ def getRelayStates():
     return html
 
 
+app = Flask(__name__)
+
+
 @app.route('/')
 def index(body="", title="Home"):
+    """:returns: html page headers, modifiable body and footers,
+    :arg body optional body, if empty yhen relay states and schedule,
+    :arg title page title"""
     # str = "<a href=" + url_for('control_log') + ">Control Log</a>"  # function name here
     menulist = [
         {'caption': 'Home', 'href': url_for('index')},
@@ -196,24 +198,26 @@ def index(body="", title="Home"):
 
     ]
     if body == "":  # if homepage
-        body = getRelayStates()
-        body += getSchedule()
+        body = get_relay_states()
+        body += get_schedule()
     outline = render_template('webapp-index.tmpl', navigation=menulist, body=body, title=title) + "<br>"
     return outline
 
+
 @app.route('/toggle')
 def toggle():
-    '''initialtes relay state change, based on load=load_name, supplied by index page'''
+    """initialtes relay state change, based on load=load_name, supplied by index page"""
     load = request.args.get('load', '')
-    fn = dirpath + "web.control"    # file, read by control app every second
+    fn = dirpath + "web.control"  # file, read by control app every second
     with open(fn, 'w') as f:
-        f.write(load+" toggle ")
-    time.sleep(3)   # wait till control app makes change, so next index page can process new states
+        f.write(load + " toggle ")
+    time.sleep(3)  # wait till control app makes change, so next index page can process new states
     return index()
+
 
 @app.route('/schedule')
 def schedule():
-    content = getSchedule()
+    content = get_schedule()
     outline = index(content, "Schedule")
     return outline
 
@@ -226,40 +230,41 @@ def control_log():
         now = datetime.datetime.now()
         date = now.strftime("%Y-%m-%d")
 
-    dateslist = getLogDates(logfile)
+    dateslist = get_log_dates(logfile)
     outline = render_template('webapp-contol-log.tmpl', dates=dateslist, file=logfile) + "<br>"
 
-    outline = outline + getLogRecords(date)
+    outline = outline + get_log_records(date)
     outline = index(outline, "Control Log")
     return outline
 
 
 @app.route('/metering', methods=['GET', 'POST'])
 def metering():
-    meteringfiles = getFiles("pulses-*.txt")
+    meteringfiles = get_files("pulses-*.txt")
 
-    if request.method == 'POST':        # in not first time
+    if request.method == 'POST':  # in not first time
         date = request.form['date']
         meteringfile = request.form['file']
-    else:                               # first time
+    else:  # first time
         now = datetime.datetime.now()
         date = now.strftime("%Y-%m-%d")
-        meteringfile = meteringfiles[0] # assume there is at least 1 file
+        meteringfile = meteringfiles[0]  # assume there is at least 1 file
 
-    dateslist = getLogDates(meteringfile)
-    if date not in dateslist:   # unlikely nothing for today case
-        date = dateslist[0]     # pick last date available
-    outline = render_template('webapp-metering-log.tmpl', dates=dateslist, file=meteringfile, date=date, files=meteringfiles) + "<br>"
+    dateslist = get_log_dates(meteringfile)
+    if date not in dateslist:  # unlikely nothing for today case
+        date = dateslist[0]  # pick last date available
+    outline = render_template('webapp-metering-log.tmpl', dates=dateslist, file=meteringfile, date=date,
+                              files=meteringfiles) + "<br>"
 
-    outline = outline + getLogMetering(date, meteringfile)
+    outline = outline + get_metering_log(date, meteringfile)
     outline = index(outline, "Metering aggregation")
     return outline
 
 
 if __name__ == '__main__':
-    setDirPath()
+    set_dir_path()
     if os.name == 'posix':
         dbg = False
-    else:    # debug on Windows
-        dbg= True
+    else:  # debug on Windows
+        dbg = True
     app.run(debug=dbg, host='0.0.0.0')
