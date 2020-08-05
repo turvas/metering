@@ -148,19 +148,25 @@ def getRelayStates():
     lasttime = ""
     lastlines = []
     N = 10
-    dtlen = 19
     with open(fn, 'r') as f:    # find N last lines based on same timestamp
         for line in (f.readlines()[-N:]):  # read last N line
+            # 2020-08-05 00:00:17 00 unpowering boiler1, relay GPIO: 17
             if "relay" in line:
-                if len(lasttime) == 0:  # first time
-                    lasttime = line[0:dtlen]
+                #ll = len(line)
+                gpio = "GPIO: "+line[-3:-1]  # 2 chars from end, exclude newline
+                if len(lastlines) == 0:         # first time
+                    lastlines.append( line )
                 else:
-                    thistime = line[0:dtlen]
-                    if thistime == lasttime:
+                    i = 0
+                    found = False
+                    for l in lastlines:
+                        if gpio in l:           # new record for existing relay
+                            lastlines[i] = line
+                            found = True
+                        i += 1
+                    if not found:
                         lastlines.append(line)
-                    else:
-                        lasttime = thistime
-                        lastlines = [line]
+
     # <p style="background-color:red;">A red paragraph.</p>
     html = 'Click on buttons to change state for current hour:'
     for line in lastlines:
@@ -196,8 +202,9 @@ def index(body="", title="Home"):
 
 @app.route('/toggle')
 def toggle():
+    '''initialtes relay state change, based on load=load_name, supplied by index page'''
     load = request.args.get('load', '')
-    fn = dirpath + "web.control"
+    fn = dirpath + "web.control"    # file, read by control app every second
     with open(fn, 'w') as f:
         f.write(load+" toggle ")
     time.sleep(3)   # wait till control app makes change, so next index page can process new states
@@ -247,4 +254,8 @@ def metering():
 
 if __name__ == '__main__':
     setDirPath()
-    app.run(debug=True, host='0.0.0.0')
+    if os.name == 'posix':
+        dbg = False
+    else:    # debug on Windows
+        dbg= True
+    app.run(debug=dbg, host='0.0.0.0')
