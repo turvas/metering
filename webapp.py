@@ -237,6 +237,7 @@ def control_log():
 @app.route('/metering', methods=['GET', 'POST'])
 def metering():
     meteringfiles = getFiles("pulses-*.txt")
+
     if request.method == 'POST':        # in not first time
         date = request.form['date']
         meteringfile = request.form['file']
@@ -246,6 +247,8 @@ def metering():
         meteringfile = meteringfiles[0] # assume there is at least 1 file
 
     dateslist = getLogDates(meteringfile)
+    if date not in dateslist:   # unlikely nothing for today case
+        date = dateslist[0]     # pick last date available
     outline = render_template('webapp-metering-log.tmpl', dates=dateslist, file=meteringfile, date=date, files=meteringfiles) + "<br>"
 
     outline = outline + getLogMetering(date, meteringfile)
