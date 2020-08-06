@@ -76,7 +76,6 @@ def get_log_records(date: str, changes_only=True, linefeed="<br>"):
     return outline
 
 
-#
 def get_metering_log(date, filename, linefeed="<br>"):
     """:returns: multiline aggregated hourly readings and daily sum"""
     outline = ""
@@ -133,10 +132,13 @@ def get_files(pattern: str):
 
 
 def get_schedule(fn='schedule.html'):
-    """:returns schedule file contents"""
+    """:returns schedule file contents with date"""
+    now = datetime.datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    content = "Schedule for " + today + ":<br>"
     filename = dirpath + fn
     with open(filename, "r") as f:
-        content = f.read()
+        content += f.read()
     return content
 
 
