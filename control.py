@@ -25,24 +25,22 @@ taastuvenergiatasu = 15.6 / (24 * 30)  # 0.02     # tunni kohta arvutatud (1400 
 ampritasu = 14.46 / (24 * 30)  # 0.02    # kuutasu jagatud tunni peale (25A)
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
 dirpath = ""  # subject to cange, depending OS
-file_name = "nps-export.csv"  # subject to dir prepend
-logfile = "control.log"
-htmlfile = "schedule.html"
-prices = []  # list 24, kwh cost by hr
-schedules = []  # list of schedules (which are lists)
+nps_export_fn = "nps-export.csv"  # subject to dir prepend
+control_log_fn = "control.log"
+schedule_html_fn = "schedule.html"
+prices = []             # list 24, kwh cost by hr
+schedules = []          # list of schedules (which are lists)
+relays = []
 # power kW, consumption in Kwh, hrStart2 in 24h system, if no zone2, then 'hrStart2': 24
 loads = [
     {'name': 'boiler1', 'gpioPin': 17, 'power': 2, 'daily_consumption': 9, 'hrStart2': 15, 'consumption2': 3},
     {'name': 'boiler2', 'gpioPin': 27, 'power': 2, 'daily_consumption': 9, 'hrStart2': 15, 'consumption2': 3}
 ]
-relays = []
-# in shell
+# in shell:
 # echo none | sudo tee /sys/class/leds/led0/trigger
 # echo gpio | sudo tee /sys/class/leds/led1/trigger
-activityLED: LED  # /sys/class/leds/led0
-
-
 # powerLED: LED       # /sys/class/leds/led1    # power is hardwired on original Pi
+activityLED: LED  # /sys/class/leds/led0
 
 
 def logger(msg: str, output="both"):
@@ -51,20 +49,15 @@ def logger(msg: str, output="both"):
     line = now.strftime("%Y-%m-%d %H:%M:%S %z") + " " + msg + "\n"
     if output == "both":
         print(line)
-        with open(dirpath + logfile, 'a') as f:
+        with open(dirpath + control_log_fn, 'a') as f:
             f.write(line)
 
 
 def set_dir_path():
-    """sets OS dependent directory,  . for win, /var/metering for ux"""
-    global dirpath, activityLED
+    """:returns: and sets global dirpath, OS dependent directory,  . for win, /var/metering for ux"""
+    global dirpath
     if os.name == 'posix':
         dirpath = "/var/metering/"
-        os.system('echo none | sudo tee /sys/class/leds/led0/trigger')
-    else:  # windows
-        Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
-    # power = LED(35)  # /sys/class/leds/led1
-    activityLED = LED(16)  # /sys/class/leds/led0   #16 on original Pi 1
     return dirpath
 
 
@@ -75,21 +68,21 @@ def blink_led():
     activityLED.toggle()
 
 
-def download_file(filename: str, first_run=False):
-    """:returns: True, if success
-    :param filename to save,
-    :param first_run: if True, todays prices are loaded"""
-    now = datetime.datetime.now()
-    if first_run:  # wind back time by 1 day, as we need today-s prices
-        now -= datetime.timedelta(1)
+def download_file(filename: str):
+    """Downloads file for today,
+    :returns: True, if success
+    :parameter filename to save"""
     if time.daylight and time.localtime().tm_isdst > 0:  # consider DST,
-        offset = time.altzone  # is negative for positive timezone and in seconds
+        offset = time.altzone               # is negative for positive timezone and in seconds
     else:
         offset = time.timezone
-    offset = int(offset / 3600)  # in seconds -> hrs (in python3 result would be float)
-    hour_in_gmt = str(24 + offset)  # works for GMT+3 at least (=21)
-    utc_offset = str(0 - offset) + ":00"  # because now.strftime("%z") not working on Win
-    start = now.strftime("%Y-%m-%d")  # UTC time in URL, prognosis starts yesterday from period (which is today)
+    offset = int(offset / 3600)             # in seconds -> hrs (in python3 result would be float)
+    hour_in_gmt = str(24 + offset)          # works for GMT+3 at least (=21)
+    utc_offset = str(0 - offset) + ":00"    # because now.strftime("%z") not working (on Win at least)
+    now = datetime.datetime.now()
+    if offset < 0:
+        now -= datetime.timedelta(1)   # UTC time in URL, wind back time by 1 day (we are GMT+..), as we need today-s prices
+    start = now.strftime("%Y-%m-%d")        # UTC time in URL, prognosis starts yesterday from period (which is today)
     tomorrow = now + datetime.timedelta(1)  # add 1 day
     end = tomorrow.strftime("%Y-%m-%d")
     # &start=2020-04-12+21:00:00&end=2020-04-13+21:00:00&format=csv
@@ -99,8 +92,7 @@ def download_file(filename: str, first_run=False):
     resp = requests.get(url, allow_redirects=True)  # type: Response
     if resp.ok and len(resp.text) > 100:
         open(filename, 'w', encoding="utf-8").write(resp.text)  # need encoding in py3
-        logger("File for " + end + "(localtime) downloaded OK to " + filename + " using UTC offset " + utc_offset +
-            " fr=" + str(first_run))
+        logger("File for " + end + "(localtime) downloaded OK to " + filename + " using UTC offset " + utc_offset)
         ret = True
     else:
         logger("ERROR: download of " + url + " failed!, response:" + str(resp.content))
@@ -118,7 +110,7 @@ def is_float(value: str):
 
 
 def read_prices(filename: str):
-    """:returns: list of 24 elements, Eur/kwh, based on filename"""
+    """:returns: list of 24 elements with börsihind, Eur/kwh, based on filename"""
     borsihinnad = []
     with open(filename, "r") as f:
         f.readline()  # header line
@@ -168,11 +160,13 @@ def output_html_table_row(columns: list, is_header=False):
     return html
 
 
-def output_html_table(rows, rownames, header=[]):
+def output_html_table(rows: list, rownames: list, header: list = None):
     """:return: HTML table from list of lists, default with numbers as table headers,
-    :param rows list of lists, typically schedules,
-    :param rownames list of dictionaries, where "name" key is used for rowname,
-    :param header: optional list of Header row contents"""
+    :param rows list of rows(lists), typically schedules,
+    :param rownames list of dictionaries, where "name" key is used for first column,
+    :param header optional list of Header row columns"""
+    if header is None:
+        header = []
     count = len(rows[0])
     style = '<style> ' \
             'table, th, td {' \
@@ -186,14 +180,14 @@ def output_html_table(rows, rownames, header=[]):
             header.append(i)
     html += output_html_table_row(["Hours:"] + header, True)  # one empty cell in beginning
     for i in range(len(rows)):
-        html += output_html_table_row(
-            [rownames[i]["name"]] + rows[i])  # create list from name string, to concatenate lists
+        html += output_html_table_row([rownames[i]["name"]] + rows[i])  # create list from name string, to concatenate lists
     html += '</table>' + "\n"
     return html
 
 
-def get_price(di):
-    """Price extractor for pricing dict item"""
+def get_price(di: dict):
+    """:returns: float Price from pricing dict item,
+        :rtype: float"""
     return di['price']
 
 
@@ -279,31 +273,22 @@ def process_relays():
         i += 1
 
 
-def calc_filename(filename, first_run=False):
-    """calculates filename for tomorrows date"""
-
+def calc_filename(filename: str):
+    """:returns: filename for todays date"""
     now = datetime.datetime.now()
-    if first_run:  # wind back time by 1 day, as we need today-s
-        now -= datetime.timedelta(1)
-    tomorrow = now + datetime.timedelta(1)  # add 1 day
-    end = tomorrow.strftime("%Y-%m-%d")
-
+    today = now.strftime("%Y-%m-%d")
     fnl = len(filename)
-    fn = filename[0:fnl - 4]
-    fn += "-" + end + ".csv"
+    fn = filename[0:fnl-4]
+    fn += "-" + today + ".csv"
     return fn
 
 
-def daily_job(first_run=False):
+def daily_job():
     """downloads file for tomorrow and creates schedules"""
-    global prices, htmlfile, relays
-    if first_run:
-        for load in loads:
-            relay = LED(load["gpioPin"])  # init output objects for relays
-            relays.append(relay)
+    global prices
     # logger("downloadFile ..")
-    filename = calc_filename(file_name, first_run)
-    ret = download_file(filename, first_run)
+    filename = calc_filename(nps_export_fn)
+    ret = download_file(filename)
     if ret:
         # logger("readPrices ..")
         borsihinnad = read_prices(filename)
@@ -313,18 +298,17 @@ def daily_job(first_run=False):
         if len(prices) > 23:
             n = create_schedules()
             html = output_html_table(schedules + [prices], loads + [{"name": "Prices"}])  # append last row with prices
-            htmlfile = dirpath + htmlfile
-            with open(htmlfile, "w") as f:
+            with open(schedule_html_fn, "w") as f:
                 f.write(html)
             logger("DailyJob run completed, created " + str(n) + " schedules")
         else:
             logger("DailyJob run completed with errors, no prices obtained")
     else:
-        logger("DailyJob run completed, keeping existing schedules")
+        logger("DailyJob run download_file failed, keeping existing schedules")
 
 
-def find_load(load_name):
-    """find load object, based on name, returns index in list or -1 if not found"""
+def find_load(load_name: str):
+    """:returns: index in list of load objects, based on name, or -1 if not found"""
     loadcount = len(loads)
     for i in range(loadcount):
         if load_name == loads[i]["name"]:
@@ -372,25 +356,43 @@ class GracefulKiller:
         logger("service stop signal")
         if os.name == 'posix':
             os.system("echo mmc0 | sudo tee/sys/class/leds/led0/trigger")  # restore override by us
-
         self.kill_now = True
 
 
-def main():
-    global file_name
-    logger("init control..")
-    set_dir_path()
-    file_name = dirpath + file_name  # prepend dir to original name
+def init_system():
+    """initial setup steps"""
+    global nps_export_fn, schedule_html_fn, relays, activityLED
 
+    logger("init control module..")
+
+    set_dir_path()
+    nps_export_fn = dirpath + nps_export_fn     # prepend dir to original name
+    schedule_html_fn = dirpath + schedule_html_fn
+
+    if os.name == 'posix':
+        os.system('echo none | sudo tee /sys/class/leds/led0/trigger')
+    else:                   # windows for dev
+        Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
+
+    for load in loads:
+        relay = LED(load["gpioPin"])            # init output objects for relays
+        relays.append(relay)
+
+    # powerLED = LED(35)  # /sys/class/leds/led1
+    activityLED = LED(16)  # /sys/class/leds/led0   #16 on original Pi 1, todo-3: make dynamic based on Pi version
+
+def main():
+
+    init_system()
     # logger("dailyJob..")
-    daily_job(True)  # first time to load today-s prices
+    daily_job()                                         # load today-s prices
     # logger("processRelays..")
-    process_relays()  # set proper state
+    process_relays()                                    # set proper state
     # logger("prepare schedules..")
+    schedule.every().day.at("00:01").do(daily_job)      # pisut enne uue paeva algust
     schedule.every(5).minutes.do(process_relays)
-    schedule.every(3).seconds.do(blink_led)  # heartbeat 1:2 suhtega
-    schedule.every().second.do(process_web_commands)  # webapp may trigger relays
-    schedule.every().day.at("23:58").do(daily_job)  # pisut enne uue paeva algust
+    schedule.every(3).seconds.do(blink_led)             # heartbeat 1:2 suhtega
+    schedule.every().second.do(process_web_commands)    # webapp may trigger relays
     # logger("create GracefulKiller..")
     killer = GracefulKiller()
     while not killer.kill_now:
