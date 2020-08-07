@@ -9,6 +9,7 @@ from flask import Flask, url_for, render_template
 from flask import request
 
 dirpath = "./"
+prices_fn = "prices.txt"
 logfile = "control.log"
 
 # by ChrisP from https://stackoverflow.com/questions/92438/stripping-non-printable-characters-from-a-string-in-python
@@ -122,7 +123,7 @@ def get_log_dates(filename: str):
 
 
 def get_files(pattern: str):
-    """:returns: reverse sorted list of files (most recent first) matching pattern"""
+    """:returns: reverse sorted list of files in dirpath (most recent first) matching pattern"""
     files = []
     os.chdir(dirpath)
     for file in glob.glob(pattern):
@@ -217,9 +218,49 @@ def toggle():
     return index()
 
 
+def create_graph(bar_color_fn: str, bar_height_fn=prices_fn):
+    """:returns: html with graph, title from filename
+    :param bar_height_fn: with contents of prices by hr list,
+    :param bar_color_fn with contents of schedule list gives bar color
+    :rtype: str"""
+    bar_labels = []
+    for hr in range(24):
+        bar_labels.append(hr)
+    with open(dirpath + bar_height_fn, "r") as f:
+        bar_values = f.readline()
+
+    with open(dirpath + bar_color_fn, "r") as f:
+        schedule0 = f.read()
+    loadname = bar_color_fn[9:-4]
+    # [True, True, True, False, False, False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, True, False]
+    schedule1 = schedule0[1:-1] + " "  # remove []
+    schedule2 = schedule1.split(', ')
+    bg_colors = []
+    brd_colors = []
+    for hr in range(24):
+        sc = schedule2[hr]
+        if sc == 'True':  # str: True
+            bg_colors.append('rgba(255, 99, 132, 0.2)')  # red
+            brd_colors.append('rgba(255, 99, 132, 1)')
+        else:
+            bg_colors.append('rgba(75, 192, 192, 0.2)')  # green
+            brd_colors.append('rgba(75, 192, 192, 1)')
+    bgc = bg_colors
+    brdc = brd_colors
+    content = render_template('webapp-bar-chart.html', title='Kw/h Price', max=2.0, labels=bar_labels,
+                              values=bar_values, bg_colors=bgc, brd_colors=brdc, label=loadname)
+    return content
+
+
 @app.route('/schedule')
 def schedule():
     content = get_schedule()
+
+    schedule_files = get_files('schedule-*.txt')
+    if len(schedule_files) > 0:
+        fn = schedule_files[0]
+        content += create_graph(fn)
+
     outline = index(content, "Schedule")
     return outline
 
