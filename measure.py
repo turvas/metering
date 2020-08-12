@@ -12,6 +12,8 @@ import schedule
 from gpiozero import Device, Button
 # for Win testing
 from gpiozero.pins.mock import MockFactory  # https://gpiozero.readthedocs.io/en/stable/api_pins.html#mock-pins
+# shared variables and functions
+import shared_energy_management as sem
 
 # gpioPin is used as index in counters, thus has to be unique
 meters = [
@@ -21,28 +23,23 @@ meters = [
 
 counters = []  # list 32
 buttons = []  # = meters
-dirpath = ""
 
 
-# sets OS dependent directory
-def set_dir_path():
-    global dirpath
-    if os.name == 'posix':
-        dirpath = "/var/metering/"
-    else:  # windows
+def init():
+    sem.set_dir_path()
+    if os.name != 'posix':  # windows
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
         schedule.every(10).seconds.do(simulate_impulses)  # generate some metering impulses
-    return dirpath
 
 
-# callback from Button
 def light_pulse_seen_1(device_calling):
+    """callback from Button"""
     global counters
     counters[device_calling.pin.number] += 1
 
 
-# called by scheduler every min
 def handle_time_event():
+    """called by scheduler every min"""
     global counters
     insert_row()  # log state
     for meter in meters:
@@ -50,8 +47,8 @@ def handle_time_event():
         counters[gpio_pin] = 0
 
 
-# writes impule counts to files, named by metered objects
 def insert_row():
+    """writes impulse counts to files, named by metered objects"""
     dt = datetime.datetime.now()
     dtf = dt.strftime("%x %X")
     ym = dt.strftime("%Y-%m")
@@ -61,13 +58,13 @@ def insert_row():
         val = counters[gpio_pin]
         txt = dtf + " " + str(val) + "\n"
         print(txt)
-        fn = dirpath + "pulses-" + meter['name'] + "-" + str(ym) + ".txt"
+        fn = sem.dirpath + "pulses-" + meter['name'] + "-" + str(ym) + ".txt"
         with open(fn, "a") as f:
             f.write(txt)
 
 
-# initializes list and Buttons
 def init_counters():
+    """initializes list and Buttons"""
     global counters
     for i in range(32):  # create array of 32 elements
         counters.append(0)
@@ -78,8 +75,8 @@ def init_counters():
         buttons.append(button)
 
 
-# simulate/generate 1 impulse on gpio-pin
 def simulate_impulse(pin=3):
+    """simulate/generate 1 impulse on gpio-pin"""
     btn_pin = Device.pin_factory.pin(pin)
     btn_pin.drive_low()
     time.sleep(0.1)
@@ -87,17 +84,15 @@ def simulate_impulse(pin=3):
     time.sleep(0.1)
 
 
-# called by scheduler, random count of pulses with maxcount, defaulting 9
-def simulate_impulses(pin=2, maxcount=9):
+def simulate_impulses(pin=3, maxcount=9):
+    """called by scheduler, random count of pulses with maxcount, defaulting 9"""
     nr = random.randint(0, maxcount)
     for i in range(nr):
         simulate_impulse(pin)
 
 
-# MAIN
-
 def main():
-    set_dir_path()
+    init()
     init_counters()
     handle_time_event()
     schedule.every(1).minutes.do(handle_time_event)

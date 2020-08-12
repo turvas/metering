@@ -7,10 +7,8 @@ import time
 
 from flask import Flask, url_for, render_template
 from flask import request
+import shared_energy_management as sem
 
-dirpath = "./"
-prices_fn = "prices.txt"
-logfile = "control.log"
 
 # by ChrisP from https://stackoverflow.com/questions/92438/stripping-non-printable-characters-from-a-string-in-python
 # build a table mapping all non-printable characters to None
@@ -26,15 +24,6 @@ def make_printable(s):
     return s.translate(NOPRINT_TRANS_TABLE)
 
 
-def set_dir_path():
-    """:returns: and sets OS dependent directory"""
-    global dirpath
-    if os.name == 'posix':
-        dirpath = "/var/metering/"
-    else:  # windows
-        return dirpath
-
-
 def is_int(value: str):
     """:returns: True if string can be converted to int"""
     try:
@@ -48,7 +37,7 @@ def is_int(value: str):
 def get_log_records(date: str, changes_only=True, linefeed="<br>"):
     """:returns: unique (by default) lines from control log"""
     outline = ""
-    fn = dirpath + logfile
+    fn = sem.dirpath + sem.control_log_fn
     lastaction = ""
     lastactions = []
     for i in range(0, 32):  # for relays indepenent tracking
@@ -84,7 +73,7 @@ def get_metering_log(date, filename, linefeed="<br>"):
     dsum = 0
     for i in range(0, 24):  # fill with 0
         total.append(0)
-    fn = dirpath + filename
+    fn = sem.dirpath + filename
     with open(fn, 'r') as f:
         for line in f:  # read by line
             if date in line:
@@ -109,7 +98,7 @@ def get_log_dates(filename: str):
     """:returns: reverse sorted list unique date part existing in file (first word in line)"""
     dateslist = []
     # datesdictlist = []
-    fn = dirpath + filename
+    fn = sem.dirpath + filename
     with open(fn, 'r') as f:
         for line in f:  # read by line
             pos = line.find(" ")  # date boundary
@@ -125,19 +114,19 @@ def get_log_dates(filename: str):
 def get_files(pattern: str):
     """:returns: reverse sorted list of files in dirpath (most recent first) matching pattern"""
     files = []
-    os.chdir(dirpath)
+    os.chdir(sem.dirpath)
     for file in glob.glob(pattern):
         files.append(file)
     files.sort(reverse=True)
     return files
 
 
-def get_schedule(fn='schedule.html'):
+def get_schedule(fn=sem.schedule_html_fn):
     """:returns schedule file contents with date"""
     now = datetime.datetime.now()
     today = now.strftime("%Y-%m-%d")
     content = "Schedule for " + today + ":<br>"
-    filename = dirpath + fn
+    filename = sem.dirpath + fn
     with open(filename, "r") as f:
         content += f.read()
     return content
@@ -146,7 +135,7 @@ def get_schedule(fn='schedule.html'):
 def get_relay_states():
     """:return: html formatted color coded states,
     picks from control logfile last N events based on same timestamp """
-    fn = dirpath + logfile
+    fn = sem.dirpath + sem.control_log_fn
     lastlines = []
     with open(fn, 'r') as f:  # find N last lines based on same timestamp
         for line in (f.readlines()[-10:]):  # read last 10 line
@@ -211,14 +200,14 @@ def index(body="", title="Home"):
 def toggle():
     """initialtes relay state change, based on load=load_name, supplied by index page"""
     load = request.args.get('load', '')
-    fn = dirpath + "web.control"  # file, read by control app every second
+    fn = sem.dirpath + sem.control_fn  # file, read by control app every second
     with open(fn, 'w') as f:
         f.write(load + " toggle ")
     time.sleep(3)  # wait till control app makes change, so next index page can process new states
     return index()
 
 
-def create_graph(bar_color_fn: str, bar_height_fn=prices_fn):
+def create_graph(bar_color_fn: str, bar_height_fn=sem.prices_fn):
     """:returns: html with graph, title from filename
     :param bar_height_fn: with contents of prices by hr list,
     :param bar_color_fn with contents of schedule list gives bar color
@@ -226,10 +215,10 @@ def create_graph(bar_color_fn: str, bar_height_fn=prices_fn):
     bar_labels = []
     for hr in range(24):
         bar_labels.append(hr)
-    with open(dirpath + bar_height_fn, "r") as f:
+    with open(sem.dirpath + bar_height_fn, "r") as f:
         bar_values = f.readline()
 
-    with open(dirpath + bar_color_fn, "r") as f:
+    with open(sem.dirpath + bar_color_fn, "r") as f:
         schedule0 = f.read()
     loadname = bar_color_fn[9:-4]
     # [True, True, True, False, False, False, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, False, True, False]
@@ -273,8 +262,8 @@ def control_log():
         now = datetime.datetime.now()
         date = now.strftime("%Y-%m-%d")
 
-    dateslist = get_log_dates(logfile)
-    outline = render_template('webapp-contol-log.tmpl', dates=dateslist, file=logfile) + "<br>"
+    dateslist = get_log_dates(sem.control_log_fn)
+    outline = render_template('webapp-contol-log.tmpl', dates=dateslist, file=sem.control_log_fn) + "<br>"
 
     outline = outline + get_log_records(date)
     outline = index(outline, "Control Log")
@@ -305,7 +294,7 @@ def metering():
 
 
 if __name__ == '__main__':
-    set_dir_path()
+    sem.set_dir_path()
     if os.name == 'posix':
         dbg = False
     else:  # debug on Windows

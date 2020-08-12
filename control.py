@@ -5,7 +5,6 @@
 #
 import datetime
 import time
-import os
 import os.path
 # manually install all below: pip install requests
 import requests
@@ -17,6 +16,8 @@ from gpiozero import Device, LED
 # for Win testing
 from gpiozero.pins.mock import MockFactory  # https://gpiozero.readthedocs.io/en/stable/api_pins.html#mock-pins
 from requests.models import Response
+# shared variables and functions: dirpath, ..
+import shared_energy_management as sem
 
 # by hour, index is hr, todo-2 add summer and wintertime /DST difference handling
 transahinnad = [0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0274, 0.0274, 0.0274, 0.0274, 0.0274,
@@ -26,12 +27,7 @@ transahinnad_wkday = [True, True, True, True, True, False, False]
 taastuvenergiatasu = 15.6 / (24 * 30)  # 0.02     # tunni kohta arvutatud (1400 kwh)
 ampritasu = 14.46 / (24 * 30)  # 0.02    # kuutasu jagatud tunni peale (25A)
 baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
-dirpath = ""  # subject to cange, depending OS
 nps_export_fn = "nps-export.csv"  # subject to dir prepend
-control_log_fn = "control.log"
-schedule_html_fn = "schedule.html"
-schedule_fn = "schedule.txt"
-prices_fn = "prices.txt"
 prices = []             # list 24, kwh cost by hr
 schedules = []          # list of schedules (which are lists)
 relays = []
@@ -53,16 +49,8 @@ def logger(msg: str, output="both"):
     line = now.strftime("%Y-%m-%d %H:%M:%S %z") + " " + msg + "\n"
     if output == "both":
         print(line)
-        with open(dirpath + control_log_fn, 'a') as f:
+        with open(sem.dirpath + sem.control_log_fn, 'a') as f:
             f.write(line)
-
-
-def set_dir_path():
-    """:returns: and sets global dirpath, OS dependent directory,  . for win, /var/metering for ux"""
-    global dirpath
-    if os.name == 'posix':
-        dirpath = "/var/metering/"
-    return dirpath
 
 
 def blink_led():
@@ -239,8 +227,8 @@ def create_schedule2(power, daily_consumption, hr_start2, consumption2):
 
 def create_schedule_fn(load_name):
     """:returns: filename with load name integrated"""
-    suffix = schedule_fn[-4:]
-    sche_fn = schedule_fn[:-4] + "-" + load_name + suffix
+    suffix = sem.schedule_fn[-4:]
+    sche_fn = sem.schedule_fn[:-4] + "-" + load_name + suffix
     return sche_fn
 
 
@@ -318,9 +306,9 @@ def daily_job():
             n = create_schedules()
             # prepare outputs for webapp:
             html = output_html_table(schedules + [prices], loads + [{"name": "Prices"}])  # append last row with prices
-            with open(schedule_html_fn, "w") as f:
+            with open(sem.schedule_html_fn, "w") as f:
                 f.write(html)
-            with open(prices_fn, "w") as f:
+            with open(sem.prices_fn, "w") as f:
                 f.write(str(prices))
             logger("DailyJob run completed, created " + str(n) + " schedules")
         else:
@@ -340,7 +328,7 @@ def find_load(load_name: str):
 
 def process_web_commands():
     """reads commands sent by webapp from file and executes relay control"""
-    fn = dirpath + "web.control"
+    fn = sem.dirpath + sem.control_fn
     if os.path.isfile(fn):
         with open(fn, 'r') as f:
             for line in f:
@@ -383,15 +371,15 @@ class GracefulKiller:
 
 def init_system():
     """initial setup steps"""
-    global nps_export_fn, schedule_html_fn, schedule_fn, prices_fn, relays, activityLED
+    global nps_export_fn, sem.schedule_html_fn, sem.schedule_fn, sem.prices_fn, relays, activityLED
 
     logger("init control module..")
 
-    set_dir_path()
-    nps_export_fn = dirpath + nps_export_fn     # prepend dir to original name
-    schedule_html_fn = dirpath + schedule_html_fn
-    prices_fn = dirpath + prices_fn
-    schedule_fn = dirpath + schedule_fn
+    sem.set_dir_path()
+    nps_export_fn = sem.dirpath + nps_export_fn     # prepend dir to original name
+    sem.schedule_html_fn = sem.dirpath + sem.schedule_html_fn
+    sem.prices_fn = sem.dirpath + sem.prices_fn
+    sem.schedule_fn = sem.dirpath + sem.schedule_fn
 
     if os.name == 'posix':
         os.system('echo none | sudo tee /sys/class/leds/led0/trigger')
