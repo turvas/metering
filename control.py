@@ -9,7 +9,6 @@ import os.path
 # manually install all below: pip install requests
 import requests
 import schedule
-import signal
 from decimal import *  # fix precision floating point
 # modules below might need manual install only in Windows
 from gpiozero import Device, LED
@@ -225,6 +224,7 @@ def create_schedule2(power, daily_consumption, hr_start2, consumption2):
         schedule0[hr] = schedule2[hr]  # overwrite
     return schedule0
 
+
 def create_schedule_fn(load_name):
     """:returns: filename with load name integrated"""
     suffix = sem.schedule_fn[-4:]
@@ -353,25 +353,10 @@ def process_web_commands():
         os.remove(fn)
 
 
-# by Mayank Jaiswal
-# from https://stackoverflow.com/questions/18499497/how-to-process-sigterm-signal-gracefully
-class GracefulKiller:
-    kill_now = False
-
-    def __init__(self):
-        signal.signal(signal.SIGINT, self.exit_gracefully)
-        signal.signal(signal.SIGTERM, self.exit_gracefully)
-
-    def exit_gracefully(self):  # , signum, frame
-        logger("service stop signal")
-        if os.name == 'posix':
-            os.system("echo mmc0 | sudo tee/sys/class/leds/led0/trigger")  # restore override by us
-        self.kill_now = True
-
-
 def init_system():
     """initial setup steps"""
-    global nps_export_fn, sem.schedule_html_fn, sem.schedule_fn, sem.prices_fn, relays, activityLED
+    global nps_export_fn, relays, activityLED
+    # global sem.schedule_html_fn, sem.schedule_fn, sem.prices_fn,
 
     logger("init control module..")
 
@@ -393,6 +378,10 @@ def init_system():
     # powerLED = LED(35)  # /sys/class/leds/led1
     activityLED = LED(16)  # /sys/class/leds/led0   #16 on original Pi 1, todo-3: make dynamic based on Pi version
 
+def cleanup_system():
+    if os.name == 'posix':
+        os.system("echo mmc0 | sudo tee/sys/class/leds/led0/trigger")  # restore override by us
+
 def main():
 
     init_system()
@@ -406,7 +395,8 @@ def main():
     schedule.every(3).seconds.do(blink_led)             # heartbeat 1:2 suhtega
     schedule.every().second.do(process_web_commands)    # webapp may trigger relays
     # logger("create GracefulKiller..")
-    killer = GracefulKiller()
+    killer = sem.GracefulKiller()
+    killer.cleanup_func = cleanup_system                # setup cleanup task
     while not killer.kill_now:
         schedule.run_pending()
         time.sleep(1)  # seconds

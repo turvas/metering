@@ -27,6 +27,7 @@ buttons = []  # = meters
 
 def init():
     sem.set_dir_path()
+    sem.init_db()
     if os.name != 'posix':  # windows
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
         schedule.every(10).seconds.do(simulate_impulses)  # generate some metering impulses
@@ -56,6 +57,8 @@ def insert_row():
     for meter in meters:
         gpio_pin = meter['gpioPin']
         val = counters[gpio_pin]
+        sem.insert_row_db(gpio_pin, val)
+
         txt = dtf + " " + str(val) + "\n"
         print(txt)
         fn = sem.dirpath + "pulses-" + meter['name'] + "-" + str(ym) + ".txt"
@@ -90,6 +93,8 @@ def simulate_impulses(pin=3, maxcount=9):
     for i in range(nr):
         simulate_impulse(pin)
 
+def cleanup():
+    sem.close_db()
 
 def main():
     init()
@@ -97,9 +102,11 @@ def main():
     handle_time_event()
     schedule.every(1).minutes.do(handle_time_event)
 
-    while True:
+    killer = sem.GracefulKiller()
+    killer.cleanup_func = cleanup
+    while not killer.kill_now:
         schedule.run_pending()
-        time.sleep(1)
+        time.sleep(1)  # seconds
 
 
 if __name__ == '__main__':
