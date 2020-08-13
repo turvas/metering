@@ -1,7 +1,9 @@
 import os
+import time
 import signal
 import datetime
 import sqlite3
+from datetime import timedelta, datetime, tzinfo, timezone
 
 control_fn = "web.control"
 control_log_fn = "control.log"
@@ -116,7 +118,7 @@ def get_configs_db(type=1):
 
 
 def insert_row_db(gpio_pin: int, value: int):
-    """saves pulses to database table"""
+    """saves pulses to database table, timestamps are in UTC"""
     db = get_db()
     cur = db.cursor()
     val = (gpio_pin, value)
@@ -124,18 +126,49 @@ def insert_row_db(gpio_pin: int, value: int):
     db.commit()
 
 
+def get_offset_utc():
+    """:returns: int localtime hours diff from UTC"""
+    if time.daylight and time.localtime().tm_isdst > 0:  # consider DST,
+        offset = time.altzone               # is negative for positive timezone and in seconds
+    else:
+        offset = time.timezone
+    offset = int(offset / 3600)             # in seconds -> hrs (in python3 result would be float)
+    return 0 - offset                         # convert polarity to normal
+
+def get_offset_utc_s():
+    """:returns: string localtime hours diff from UTC, formatted as TZ in ISO: 03:00"""
+    offset = get_offset_utc()
+    if offset > 0:
+        utc_offset = "+"
+    else:
+        utc_offset = "-"
+    if abs(offset) < 10:
+        utc_offset += "0"
+    utc_offset += str(abs(offset)) + ":00"  # because now.strftime("%z") not working (on Win at least)
+    return utc_offset
+
 def get_hourly_sum_db(gpio_pin: str, hr: int, day: str):
     """:return hourly sum for given day and hour,
-    :param day in formatted as YYYY-MM-DD"""
+    :param day in formatted as YYYY-MM-DD,
+    day and hr are in local tz"""
     db = get_db()
     cur = db.cursor()
     #date_format = "%Y-%m-%d"        #
     #dtstart = day.strftime(date_format) + " " + str(hr) + ":00:00"  # sqlite expects format YYYY-MM-DD HH:MM:SS
     #dtend = day.strftime(date_format) + " " + str(hr + 1) + ":00:00"
-    dtstart = day + " " + str(hr) + ":00:00"  # sqlite expects format YYYY-MM-DD HH:MM:SS
-    dtend = day + " " + str(hr + 1) + ":00:00"
+    if hr < 10:
+        hrs = "0" + str(hr)
+    else:
+        hrs = str(hr)
+    date_format = "%Y-%m-%d %H:%M:%S"
+    dtstart = day + " " + hrs + ":00:00" + get_offset_utc_s()  # sqlite expects format YYYY-MM-DD HH:MM:SS
+    dtstart_tz = datetime.fromisoformat(dtstart)
+    dtstart_utc = dtstart_tz.astimezone(timezone.utc)
+    dtstart_utc_s = dtstart_utc.strftime(date_format)
+    dtend_utc = dtstart_utc + timedelta(hours=1)
+    dtend_utc_s = dtend_utc.strftime(date_format)
     sql = 'SELECT sum(pulses) FROM pulses WHERE gpiopin==' + gpio_pin + \
-          ' AND created BETWEEN "' + dtstart + '" AND "' + dtend + '";'
+          ' AND created BETWEEN "' + dtstart_utc_s + '" AND "' + dtend_utc_s + '";'
     cur.execute(sql)
     row = cur.fetchone()
     sum = row[0]
