@@ -32,7 +32,7 @@ class GracefulKiller:
         signal.signal(signal.SIGINT, self.exit_gracefully)
         signal.signal(signal.SIGTERM, self.exit_gracefully)
 
-    def exit_gracefully(self):  # , signum, frame
+    def exit_gracefully(self, signum, frame):  # is called wit 3 args, 2 not used..
         """exit program with cleanup_func"""
         appname = os.path.basename(__file__)[:-3]  # remove .py from end
         Logger(appname + ".log").log("service stop signal")

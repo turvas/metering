@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # used to read energy meters and save consumption
 # Copyright by turvas
 #
@@ -29,6 +29,7 @@ def init():
     sem.set_dir_path()
     sem.init_db()
     if os.name != 'posix':  # windows
+        print("Init MockPins, impulse generation")
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
         schedule.every(10).seconds.do(simulate_impulses)  # generate some metering impulses
 
