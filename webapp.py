@@ -33,7 +33,6 @@ def is_int(value: str):
         return False
 
 
-#
 def get_log_records(date: str, changes_only=True, linefeed="<br>"):
     """:returns: unique (by default) lines from control log"""
     outline = ""
@@ -67,8 +66,9 @@ def get_log_records(date: str, changes_only=True, linefeed="<br>"):
 
 
 def get_metering_log(date: str, filename: str, linefeed="<br>", sum_only=False):
-    """:returns: multiline aggregated hourly readings and daily sum,
-    :param date in form MM/DD/YY or All"""
+    """:returns: multiline aggregated hourly (or daily) readings and daily/monthly sum,
+    :param date in form MM/DD/YY or All for full month,
+    :param filename from where raw data is processed, usually matching pattern pulses-LOAD-YYYY-MM.txt"""
     outline = ""
     total = []
     dsum = 0
@@ -114,6 +114,22 @@ def get_metering_log(date: str, filename: str, linefeed="<br>", sum_only=False):
     return outline
 
 
+def get_metering_db(date: str, gpio_pin: str, linefeed="<br>", sum_only=False):
+    """:returns: multiline aggregated hourly (or daily) readings and daily/monthly sum,
+    :param date in form MM-DD-YY or All for full month"""
+    outline = ""
+    dsum = 0
+    if date != "All":
+        #dateparts = date.split('-')
+        #day = "20" + dateparts[2] + "-" + dateparts[0] + "-" + dateparts[1]  # YYYY-MM-DD
+        for hr in range(24):
+            total = sem.get_hourly_sum_db(gpio_pin, hr, date)
+            outline = outline + str(hr) + ": " + str(total) + linefeed
+            dsum += total
+    outline = outline + "Total day:" + str(dsum)
+    return outline
+
+
 def get_log_dates(filename: str):
     """:returns: reverse sorted list unique date part existing in file (first word in line)"""
     dateslist = []
@@ -153,7 +169,7 @@ def get_schedule(fn=sem.schedule_html_fn):
 
 
 def get_relay_states():
-    """:return: html formatted color coded states,
+    """:return: list of relays(name, gpiopin, state)
     picks from control logfile last N events based on same timestamp """
     fn = sem.dirpath + sem.control_log_fn
     lastlines = []
@@ -175,20 +191,35 @@ def get_relay_states():
                         i += 1
                     if not found:
                         lastlines.append(line)
-
-    # <p style="background-color:red;">A red paragraph.</p>
-    html = 'Click on buttons to change state for current hour:'
+    relays = []
     for line in lastlines:
         # 2020-07-31 23:30:50  23 unpowering boiler2, relay GPIO: 27
-        load = line.split()[4]
-        rest = line.split(',')[1]
-        txt = load + rest
-        html += '<button type="button" onclick="location.href=\'/toggle?load=' + load + '\';" style="background-color:'
+        spl = line.split()
+        gpio = spl[7]
+        load = spl[4][:-1]  # remove , from end
         if "unpower" in line:
+            state = False
+        else:
+            state = True
+        relay = list((load, gpio, state))
+        relays.append(relay)
+    return relays
+
+def get_relay_states_html():
+    """:return: html formatted color coded states as buttons,
+    picks from control logfile last N events based on same timestamp """
+
+    html = 'Click on buttons to change state for current hour:'
+    relays = get_relay_states()
+    for relay in relays:
+        load = relay[0]
+        gpiopin = relay[1]
+        html += '<button type="button" onclick="location.href=\'/toggle?load=' + load + '\';" style="background-color:'
+        if not relay[2]:
             html += "red"
         else:
             html += "green"
-        html += ';">' + txt + '</button>'
+        html += ';">' + load + ", relay GPIO:" + gpiopin +'</button>'
     html += '<br>'
     return html
 
@@ -205,12 +236,13 @@ def index(body="", title="Home"):
     menulist = [
         {'caption': 'Home', 'href': url_for('index')},
         {'caption': 'Metering', 'href': url_for('metering')},
+        {'caption': 'Metering DB', 'href': url_for('metering2')},
         {'caption': 'Schedule', 'href': url_for('schedule')},
         {'caption': 'Control Log', 'href': url_for('control_log')}
 
     ]
     if body == "":  # if homepage
-        body = get_relay_states()
+        body = get_relay_states_html()
         body += get_schedule()
     outline = render_template('webapp-index.tmpl', navigation=menulist, body=body, title=title) + "<br>"
     return outline
@@ -310,6 +342,37 @@ def metering():
 
     outline = outline + get_metering_log(date, meteringfile)
     outline = index(outline, "Metering aggregation")
+    return outline
+
+
+@app.route('/metering2', methods=['GET', 'POST'])
+def metering2():
+    meters = sem.get_configs_db()
+    meter_names = []
+    for meter in meters:
+        meter_name = meter[2]       # id, gpio, name, ...
+        meter_names.append(meter_name)
+
+    if request.method == 'POST':  # in not first time
+        date = request.form['date']
+        meter_name = request.form['file']
+    else:  # first time
+        now = datetime.datetime.now()
+        date = now.strftime("%Y-%m-%d")
+        meter_name = meter_names[0]  # assume there is at least 1
+    for meter in meters:            # search gpiopin
+        if meter[2] == meter_name:   # name matches
+            gpio = meter[1]
+    dateslist = sem.get_db_dates( str(gpio) ) + ["All"]
+    if date not in dateslist:  # unlikely nothing for today case
+        date = dateslist[0]  # pick last date available
+    outline = render_template('webapp-metering-log.tmpl', dates=dateslist, file=meter_name, date=date,
+                              files=meter_names) + "<br>"
+
+    outline = outline + get_metering_db(date, str(gpio) )
+
+    outline = index(outline, "Metering aggregation")
+    sem.close_db()
     return outline
 
 

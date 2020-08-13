@@ -28,6 +28,8 @@ buttons = []  # = meters
 def init():
     sem.set_dir_path()
     sem.init_db()
+    for meter in meters:        # update config database
+        sem.update_config_db(meter['gpioPin'], meter['name'])
     if os.name != 'posix':  # windows
         print("Init MockPins, impulse generation")
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
