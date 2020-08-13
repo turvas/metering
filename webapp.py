@@ -66,31 +66,51 @@ def get_log_records(date: str, changes_only=True, linefeed="<br>"):
     return outline
 
 
-def get_metering_log(date, filename, linefeed="<br>"):
-    """:returns: multiline aggregated hourly readings and daily sum"""
+def get_metering_log(date: str, filename: str, linefeed="<br>", sum_only=False):
+    """:returns: multiline aggregated hourly readings and daily sum,
+    :param date in form MM/DD/YY or All"""
     outline = ""
     total = []
     dsum = 0
-    for i in range(0, 24):  # fill with 0
-        total.append(0)
-    fn = sem.dirpath + filename
-    with open(fn, 'r') as f:
-        for line in f:  # read by line
-            if date in line:
-                line1 = line.strip()  # remove linefeed from end, sometimes spaces in beginning
-                line = make_printable(line1)
-                strlen = len(line)
-                try:
-                    hrstr = line[9:11]
-                    hr = int(hrstr)  # last not included
-                    pulses = line[18:strlen]  # last char is linefeed, tody verify str lengt
-                    total[hr] += int(pulses)
-                except:
-                    print(fn + ", line:" + line + ", hr:" + hrstr)
-    for hr in range(0, 24):
-        outline = outline + str(hr) + ": " + str(total[hr]) + linefeed
-        dsum += total[hr]
-    outline = outline + "Total day:" + str(dsum)
+    msum = 0
+    if date == "All":   # monthly
+        yr = filename[-9:-7]
+        mo = filename[-6:-4]
+        for day in range(1,32):
+            d = str(day)
+            if day < 10:
+                d = "0" + d
+            date = mo + "/" + d + "/" + yr
+            daily = get_metering_log(date, filename, sum_only=True)     # 07/16/20 3084
+            outline += daily
+            consumed = daily[9:-4]    # energy before web linefeed
+            msum += int(consumed)
+        outline += linefeed + "Total month:" + str(msum)
+    else:               # daily, given date
+        for i in range(0, 24):  # fill with 0
+            total.append(0)
+        fn = sem.dirpath + filename
+        with open(fn, 'r') as f:
+            for line in f:  # read by line
+                if date in line:
+                    line1 = line.strip()  # remove linefeed from end, sometimes spaces in beginning
+                    line = make_printable(line1)
+                    strlen = len(line)
+                    try:
+                        hrstr = line[9:11]
+                        hr = int(hrstr)  # last not included
+                        pulses = line[18:strlen]  # last char is linefeed, tody verify str lengt
+                        total[hr] += int(pulses)
+                    except:
+                        print(fn + ", line:" + line + ", hr:" + hrstr)
+        for hr in range(24):
+            if not sum_only:
+                outline = outline + str(hr) + ": " + str(total[hr]) + linefeed
+            dsum += total[hr]
+        if not sum_only:        # daily
+            outline = outline + "Total day:" + str(dsum)
+        else:                   # monthly, All
+            outline = outline + date + " "+ str(dsum) + linefeed
     return outline
 
 
@@ -274,15 +294,15 @@ def control_log():
 def metering():
     meteringfiles = get_files("pulses-*.txt")
 
-    if request.method == 'POST':  # in not first time
+    if request.method == 'POST':    # in not first time
         date = request.form['date']
         meteringfile = request.form['file']
-    else:  # first time
+    else:                           # first time
         now = datetime.datetime.now()
         date = now.strftime("%Y-%m-%d")
         meteringfile = meteringfiles[0]  # assume there is at least 1 file
 
-    dateslist = get_log_dates(meteringfile)
+    dateslist = get_log_dates(meteringfile) + ["All"]
     if date not in dateslist:  # unlikely nothing for today case
         date = dateslist[0]  # pick last date available
     outline = render_template('webapp-metering-log.tmpl', dates=dateslist, file=meteringfile, date=date,
