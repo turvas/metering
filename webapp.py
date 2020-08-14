@@ -140,7 +140,7 @@ def get_metering_db(date: str, gpio_pin: str, linefeed="<br>", sum_only=False):
             outline += line
             nrg = line.split()[1]
             msum += int(nrg[:-4])   # remove <br>
-        outline += "Total " + date + ": " + str(msum) + linefeed
+        outline += linefeed + "Total " + date + ": " + str(msum) + linefeed
     return outline
 
 
