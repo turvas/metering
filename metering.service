@@ -1,6 +1,6 @@
 # Contents of /etc/systemd/system/metering.service
 [Unit]
-Description=Metering service by turvas
+Description=Energy Management - Metering service by turvas
 After=network.target
 
 [Service]

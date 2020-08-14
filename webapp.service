@@ -1,6 +1,6 @@
 # Contents of /etc/systemd/system/webapp.service
 [Unit]
-Description=Webapp service by turvas
+Description=Energy Management - Webapp service by turvas
 After=network.target
 
 [Service]

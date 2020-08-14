@@ -1,6 +1,6 @@
 # Contents of /etc/systemd/system/control.service
 [Unit]
-Description=Control service by turvas
+Description=Energy Management - Control service by turvas
 After=network.target
 
 [Service]
