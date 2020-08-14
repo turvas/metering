@@ -9,7 +9,6 @@ from flask import Flask, url_for, render_template
 from flask import request
 import shared_energy_management as sem
 
-
 # by ChrisP from https://stackoverflow.com/questions/92438/stripping-non-printable-characters-from-a-string-in-python
 # build a table mapping all non-printable characters to None
 NOPRINT_TRANS_TABLE = {
@@ -73,20 +72,20 @@ def get_metering_log(date: str, filename: str, linefeed="<br>", sum_only=False):
     total = []
     dsum = 0
     msum = 0
-    if date == "All":   # monthly
+    if date == "All":  # monthly
         yr = filename[-9:-7]
         mo = filename[-6:-4]
-        for day in range(1,32):
+        for day in range(1, 32):
             d = str(day)
             if day < 10:
                 d = "0" + d
             date = mo + "/" + d + "/" + yr
-            daily = get_metering_log(date, filename, sum_only=True)     # 07/16/20 3084
+            daily = get_metering_log(date, filename, sum_only=True)  # 07/16/20 3084
             outline += daily
-            consumed = daily[9:-4]    # energy before web linefeed
+            consumed = daily[9:-4]  # energy before web linefeed
             msum += int(consumed)
         outline += linefeed + "Total month:" + str(msum)
-    else:               # daily, given date
+    else:  # daily, given date
         for i in range(0, 24):  # fill with 0
             total.append(0)
         fn = sem.dirpath + filename
@@ -107,26 +106,41 @@ def get_metering_log(date: str, filename: str, linefeed="<br>", sum_only=False):
             if not sum_only:
                 outline = outline + str(hr) + ": " + str(total[hr]) + linefeed
             dsum += total[hr]
-        if not sum_only:        # daily
+        if not sum_only:  # daily
             outline = outline + "Total day:" + str(dsum)
-        else:                   # monthly, All
-            outline = outline + date + " "+ str(dsum) + linefeed
+        else:  # monthly, All
+            outline = outline + date + " " + str(dsum) + linefeed
     return outline
 
 
 def get_metering_db(date: str, gpio_pin: str, linefeed="<br>", sum_only=False):
     """:returns: multiline aggregated hourly (or daily) readings and daily/monthly sum,
-    :param date in form MM-DD-YY or All for full month"""
+    :param date in form YYYY-MM-DD or All for full month"""
     outline = ""
     dsum = 0
     if date != "All":
-        #dateparts = date.split('-')
-        #day = "20" + dateparts[2] + "-" + dateparts[0] + "-" + dateparts[1]  # YYYY-MM-DD
         for hr in range(24):
             total = sem.get_hourly_sum_db(gpio_pin, hr, date)
-            outline = outline + str(hr) + ": " + str(total) + linefeed
+            if not sum_only:
+                outline = outline + str(hr) + ": " + str(total) + linefeed
             dsum += total
-    outline = outline + "Total day:" + str(dsum)
+        if not sum_only:
+            outline += "Total "
+        outline += date + ": " + str(dsum) + linefeed
+    else:  # monthly
+        msum = 0
+        date_format = "%Y-%m"  # YYYY-MM
+        yydd = datetime.datetime.now().strftime(date_format) + '-'
+        for day in range(1, 32):
+            if day < 10:
+                days_s = "0" + str(day)
+            else:
+                days_s = str(day)
+            line = get_metering_db(yydd + days_s, gpio_pin, sum_only=True)
+            outline += line
+            nrg = line.split()[1]
+            msum += int(nrg[:-4])   # remove <br>
+        outline += "Total " + date + ": " + str(msum) + linefeed
     return outline
 
 
@@ -205,6 +219,7 @@ def get_relay_states():
         relays.append(relay)
     return relays
 
+
 def get_relay_states_html():
     """:return: html formatted color coded states as buttons,
     picks from control logfile last N events based on same timestamp """
@@ -219,7 +234,7 @@ def get_relay_states_html():
             html += "red"
         else:
             html += "green"
-        html += ';">' + load + ", relay GPIO:" + gpiopin +'</button>'
+        html += ';">' + load + ", relay GPIO:" + gpiopin + '</button>'
     html += '<br>'
     return html
 
@@ -326,10 +341,10 @@ def control_log():
 def metering():
     meteringfiles = get_files("pulses-*.txt")
 
-    if request.method == 'POST':    # in not first time
+    if request.method == 'POST':  # in not first time
         date = request.form['date']
         meteringfile = request.form['file']
-    else:                           # first time
+    else:  # first time
         now = datetime.datetime.now()
         date = now.strftime("%Y-%m-%d")
         meteringfile = meteringfiles[0]  # assume there is at least 1 file
@@ -350,7 +365,7 @@ def metering2():
     meters = sem.get_configs_db()
     meter_names = []
     for meter in meters:
-        meter_name = meter[2]       # id, gpio, name, ...
+        meter_name = meter[2]  # id, gpio, name, ...
         meter_names.append(meter_name)
 
     if request.method == 'POST':  # in not first time
@@ -360,16 +375,16 @@ def metering2():
         now = datetime.datetime.now()
         date = now.strftime("%Y-%m-%d")
         meter_name = meter_names[0]  # assume there is at least 1
-    for meter in meters:            # search gpiopin
-        if meter[2] == meter_name:   # name matches
+    for meter in meters:  # search gpiopin
+        if meter[2] == meter_name:  # name matches
             gpio = meter[1]
-    dateslist = sem.get_db_dates( str(gpio) ) + ["All"]
+    dateslist = sem.get_db_dates(str(gpio)) + ["All"]
     if date not in dateslist:  # unlikely nothing for today case
         date = dateslist[0]  # pick last date available
     outline = render_template('webapp-metering-log.tmpl', dates=dateslist, file=meter_name, date=date,
                               files=meter_names) + "<br>"
 
-    outline = outline + get_metering_db(date, str(gpio) )
+    outline = outline + get_metering_db(date, str(gpio))
 
     outline = index(outline, "Metering aggregation")
     sem.close_db()
