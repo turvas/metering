@@ -73,6 +73,7 @@ def get_metering_log(date: str, filename: str, linefeed="<br>", sum_only=False):
     dsum = 0
     msum = 0
     if date == "All":  # monthly
+        tic = time.perf_counter()
         yr = filename[-9:-7]
         mo = filename[-6:-4]
         for day in range(1, 32):
@@ -85,6 +86,8 @@ def get_metering_log(date: str, filename: str, linefeed="<br>", sum_only=False):
             consumed = daily[9:-4]  # energy before web linefeed
             msum += int(consumed)
         outline += linefeed + "Total month:" + str(msum)
+        toc = time.perf_counter()
+        outline += linefeed + "Generated in " + str(toc - tic)[:5] + " sec"
     else:  # daily, given date
         for i in range(0, 24):  # fill with 0
             total.append(0)
@@ -128,6 +131,7 @@ def get_metering_db(date: str, gpio_pin: str, linefeed="<br>", sum_only=False):
             outline += "Total "
         outline += date + ": " + str(dsum) + linefeed
     else:  # monthly
+        tic = time.perf_counter()
         msum = 0
         date_format = "%Y-%m"  # YYYY-MM
         yydd = datetime.datetime.now().strftime(date_format) + '-'
@@ -141,6 +145,8 @@ def get_metering_db(date: str, gpio_pin: str, linefeed="<br>", sum_only=False):
             nrg = line.split()[1]
             msum += int(nrg[:-4])   # remove <br>
         outline += linefeed + "Total " + date + ": " + str(msum) + linefeed
+        toc = time.perf_counter()
+        outline += linefeed + "Generated in " + str(toc - tic)[:5] + " sec"
     return outline
 
 
