@@ -89,7 +89,20 @@ def init_db():
             fcontent = f.read()
             db.executescript(fcontent)
         print("Database initialized")
+
+    cur.execute("PRAGMA index_list('config');")
+    exist = cur.fetchone()
+    if exist is None:
+        print("Adding index for config")
         sql = "CREATE UNIQUE INDEX idx_gpio ON config (gpiopin);"  # prepare for INSERT or REPLACE
+        cur.execute(sql)
+        db.commit()
+
+    cur.execute("PRAGMA index_list('pulses');")
+    exist = cur.fetchone()
+    if exist is None:
+        print("Adding index for pulses")
+        sql = "CREATE INDEX idx_pulses_gpiopin ON pulses (gpiopin);"  # for faster queries
         cur.execute(sql)
         db.commit()
 
