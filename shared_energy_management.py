@@ -3,7 +3,7 @@ import time
 import signal
 import datetime
 import sqlite3
-from datetime import timedelta, datetime, tzinfo, timezone
+from datetime import timedelta, datetime, timezone  # tzinfo
 
 control_fn = "web.control"
 control_log_fn = "control.log"
@@ -51,7 +51,7 @@ class Logger:
 
     def log(self, msg: str, output="both"):
         """log to logfile and screen"""
-        now = datetime.datetime.now()
+        now = datetime.now()
         line = now.strftime("%Y-%m-%d %H:%M:%S %z") + " " + msg + "\n"
         if output == "both":
             print(line)
@@ -112,25 +112,26 @@ def init_db():
     db.commit()
 
 
-def update_config_db(gpio: int, name: str, type=1, power=0, energy=0, time2=0, energy2=0):
+def update_config_db(gpio: int, name: str, gpio_type=1, power=0, energy=0, time2=0, energy2=0):
     """updates configuration table with IO objects,
      :params type can be 1=meter(default) or 2=relay"""
     db = get_db()
     cur = db.cursor()
-    val = (gpio, name, type, power, energy, time2, energy2)
-    cur.execute('REPLACE INTO config(gpiopin, name, type, power, energy, time2, energy2) VALUES (?,?,?,?,?,?,?)', val)  # to avoid sql injection
+    val = (gpio, name, gpio_type, power, energy, time2, energy2)
+    cur.execute('REPLACE INTO config(gpiopin, name, type, power, energy, time2, energy2) VALUES (?,?,?,?,?,?,?)',
+                val)  # to avoid sql injection
     db.commit()
 
 
-def get_configs_db(type=1):
+def get_configs_db(gpio_type=1):
     """:returns: list of objects (list of properties) of requested type,
-    :param type can be 1=meter(default) or 2=relay"""
+    :param gpio_type can be 1=meter(default) or 2=relay"""
     db = get_db()
     cur = db.cursor()
-    cur.execute('SELECT * from config WHERE type='+str(type))
+    cur.execute('SELECT * from config WHERE type=' + str(gpio_type))
     configs = []
     for row in cur:
-        cfg = list((row))
+        cfg = list(row)
         configs.append(cfg)
     return configs
 
@@ -147,11 +148,12 @@ def insert_row_db(gpio_pin: int, value: int):
 def get_offset_utc():
     """:returns: int localtime hours diff from UTC"""
     if time.daylight and time.localtime().tm_isdst > 0:  # consider DST,
-        offset = time.altzone               # is negative for positive timezone and in seconds
+        offset = time.altzone  # is negative for positive timezone and in seconds
     else:
         offset = time.timezone
-    offset = int(offset / 3600)             # in seconds -> hrs (in python3 result would be float)
-    return 0 - offset                         # convert polarity to normal
+    offset = int(offset / 3600)  # in seconds -> hrs (in python3 result would be float)
+    return 0 - offset  # convert polarity to normal
+
 
 def get_offset_utc_s():
     """:returns: string localtime hours diff from UTC, formatted as TZ in ISO: 03:00"""
@@ -165,15 +167,18 @@ def get_offset_utc_s():
     utc_offset += str(abs(offset)) + ":00"  # because now.strftime("%z") not working (on Win at least)
     return utc_offset
 
+
 def get_hourly_sum_db(gpio_pin: str, hr: int, day: str):
     """:return hourly sum for given day and hour,
     :param day in formatted as YYYY-MM-DD,
+    :param hr number in 24h system,
+    :param gpio_pin number
     day and hr are in local tz"""
     db = get_db()
     cur = db.cursor()
-    #date_format = "%Y-%m-%d"        #
-    #dtstart = day.strftime(date_format) + " " + str(hr) + ":00:00"  # sqlite expects format YYYY-MM-DD HH:MM:SS
-    #dtend = day.strftime(date_format) + " " + str(hr + 1) + ":00:00"
+    # date_format = "%Y-%m-%d"        #
+    # dtstart = day.strftime(date_format) + " " + str(hr) + ":00:00"  # sqlite expects format YYYY-MM-DD HH:MM:SS
+    # dtend = day.strftime(date_format) + " " + str(hr + 1) + ":00:00"
     if hr < 10:
         hrs = "0" + str(hr)
     else:
@@ -189,10 +194,10 @@ def get_hourly_sum_db(gpio_pin: str, hr: int, day: str):
           ' AND created BETWEEN "' + dtstart_utc_s + '" AND "' + dtend_utc_s + '";'
     cur.execute(sql)
     row = cur.fetchone()
-    sum = row[0]
-    if sum is None:
-        sum = 0
-    return sum
+    hr_sum = row[0]
+    if hr_sum is None:
+        hr_sum = 0
+    return hr_sum
 
 
 def get_db_dates(gpio_pin: str):
@@ -201,12 +206,10 @@ def get_db_dates(gpio_pin: str):
     dateslist = []
     db = get_db()
     cur = db.cursor()
-    sql = 'SELECT DISTINCT DATE(created) FROM pulses WHERE gpiopin==' + gpio_pin +';'
+    sql = 'SELECT DISTINCT DATE(created) FROM pulses WHERE gpiopin==' + gpio_pin + ';'
     cur.execute(sql)
     for row in cur:
         date = row[0]
         dateslist.append(date)
     dateslist.sort(reverse=True)  # fresh dates first
     return dateslist
-
-
