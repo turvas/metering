@@ -8,8 +8,7 @@ CREATE TABLE pulses (
   pulses INTEGER NOT NULL
 );
 
-CREATE INDEX idx_pulses_gpiopin ON pulses (gpiopin);
-CREATE INDEX idx_pulses_created ON pulses (created);
+CREATE INDEX idx_pulses_gpiopin_created ON pulses (gpiopin,created);
 
 CREATE TABLE config (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

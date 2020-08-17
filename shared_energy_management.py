@@ -100,11 +100,16 @@ def init_db():
 
     cur.execute("PRAGMA index_list('pulses');")
     exist = cur.fetchone()
-    if exist is None:
-        print("Adding index for pulses")
-        sql = "CREATE INDEX idx_pulses_gpiopin ON pulses (gpiopin);"  # for faster queries
-        cur.execute(sql)
+    if exist is not None:
+        print("Removing old index for pulses")
+        cur.execute("DROP INDEX IF EXISTS idx_pulses_gpiopin;")
+        cur.execute("DROP INDEX IF EXISTS idx_pulses_created;")
         db.commit()
+
+    print("Adding index for pulses")
+    sql = "CREATE INDEX idx_pulses_gpiopin_created ON pulses (gpiopin,created);"  # for faster queries
+    cur.execute(sql)
+    db.commit()
 
 
 def update_config_db(gpio: int, name: str, type=1, power=0, energy=0, time2=0, energy2=0):
