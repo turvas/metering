@@ -9,6 +9,7 @@ CREATE TABLE pulses (
 );
 
 CREATE INDEX idx_pulses_gpiopin ON pulses (gpiopin);
+CREATE INDEX idx_pulses_created ON pulses (created);
 
 CREATE TABLE config (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
