@@ -291,7 +291,7 @@ def calc_filename(filename: str):
 
 
 def daily_job():
-    """downloads file for tomorrow and creates schedules"""
+    """downloads file for today and creates schedules"""
     global prices
     # logger("downloadFile ..")
     filename = calc_filename(nps_export_fn)
@@ -333,7 +333,7 @@ def process_web_commands():
         with open(fn, 'r') as f:
             for line in f:
                 # boiler1, toggle
-                load_name = line.split(',')[0]  # there is "," after load name
+                load_name = line.split()[0]
                 command = line.split()[1]
                 load_index = find_load(load_name)
                 if load_index > -1:  # found
