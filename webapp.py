@@ -143,7 +143,7 @@ def get_metering_db(date: str, gpio_pin: str, linefeed="<br>", sum_only=False):
             line = get_metering_db(yydd + days_s, gpio_pin, sum_only=True)
             outline += line
             nrg = line.split()[1]
-            msum += int(nrg[:-4])   # remove <br>
+            msum += int(nrg[:-4])  # remove <br>
         outline += linefeed + "Total " + date + ": " + str(msum) + linefeed
         toc = time.perf_counter()
         outline += linefeed + "Generated in " + str(toc - tic)[:5] + " sec"
@@ -153,7 +153,6 @@ def get_metering_db(date: str, gpio_pin: str, linefeed="<br>", sum_only=False):
 def get_log_dates(filename: str):
     """:returns: reverse sorted list unique date part existing in file (first word in line)"""
     dateslist = []
-    # datesdictlist = []
     fn = sem.dirpath + filename
     with open(fn, 'r') as f:
         for line in f:  # read by line
@@ -161,8 +160,6 @@ def get_log_dates(filename: str):
             date = line[0:pos]
             if date not in dateslist:
                 dateslist.append(date)
-                # datesdict = dict(value=date)
-                # datesdictlist.append(datesdict)
     dateslist.sort(reverse=True)  # fresh dates first
     return dateslist
 
@@ -188,8 +185,8 @@ def get_schedule(fn=sem.schedule_html_fn):
     return content
 
 
-def get_relay_states():
-    """:return: list of relays(name, gpiopin, state)
+def get_control_last_output_lines(lines=10):
+    """:return: list of N last lines with relay states,
     picks from control logfile last N events based on same timestamp """
     fn = sem.dirpath + sem.control_log_fn
     lastlines = []
@@ -211,6 +208,13 @@ def get_relay_states():
                         i += 1
                     if not found:
                         lastlines.append(line)
+    return lastlines
+
+
+def get_relay_states():
+    """:return: list of relays(name, gpiopin, state)
+    picks from control logfile last N events based on same timestamp """
+    lastlines = get_control_last_output_lines()
     relays = []
     for line in lastlines:
         # 2020-07-31 23:30:50  23 unpowering boiler2, relay GPIO: 27
@@ -245,6 +249,19 @@ def get_relay_states_html():
     return html
 
 
+def check_control_app():
+    """:return: error message if not working/logging, or empty string, if all OK"""
+    ret = ""
+    lastline = get_control_last_output_lines(1)[0]
+    td = lastline.split()[:2]   # first 2 elements
+    tds = td[0]+" "+td[1]
+    last_time = datetime.datetime.fromisoformat(tds)
+    now = datetime.datetime.now()
+    diff = now - last_time
+    if diff.seconds > 360:  # 6 minutes
+        ret = '<br><div style="background-color:yellow;">Control program logs older than 5 mins, latest ' + tds + "</div><br>"
+    return ret
+
 app = Flask(__name__)
 
 
@@ -263,7 +280,8 @@ def index(body="", title="Home"):
 
     ]
     if body == "":  # if homepage
-        body = get_relay_states_html()
+        body = check_control_app()
+        body += get_relay_states_html()
         body += get_schedule()
     outline = render_template('webapp-index.tmpl', navigation=menulist, body=body, title=title) + "<br>"
     return outline
