@@ -25,7 +25,7 @@ transahinnad = [0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 0.0158, 
 transahinnad_wkday = [True, True, True, True, True, False, False]
 taastuvenergiatasu = 15.6 / (24 * 30)  # 0.02     # tunni kohta arvutatud (1400 kwh)
 ampritasu = 14.46 / (24 * 30)  # 0.02    # kuutasu jagatud tunni peale (25A)
-baseurl = "https://dashboard.elering.ee/et/api/nps?type=price"
+baseurl = "https://dashboard.elering.ee/api/nps/price/csv?"
 nps_export_fn = "nps-export.csv"  # subject to dir prepend
 prices = []             # list 24, kwh cost by hr
 schedules = []          # list of schedules (which are lists)
@@ -59,31 +59,32 @@ def blink_led():
     activityLED.toggle()
 
 
-def download_file(filename: str):
+def download_file(filename: str, country='ee'):
     """Downloads file for today,
     :returns: True, if success
-    :parameter filename to save"""
-    if time.daylight and time.localtime().tm_isdst > 0:  # consider DST,
-        offset = time.altzone               # is negative for positive timezone and in seconds
-    else:
-        offset = time.timezone
-    offset = int(offset / 3600)             # in seconds -> hrs (in python3 result would be float)
-    hour_in_gmt = str(24 + offset)          # works for GMT+3 at least (=21)
-    utc_offset = str(0 - offset) + ":00"    # because now.strftime("%z") not working (on Win at least)
+    :parameter filename to save,
+    :param country 2-character representation ee, lv, lt, fi,
+    """
+    # todo chnge to json based api,  date format in query is ISO: 2020-08-30T00:00:00+03:00
+    # https://dashboard.elering.ee/api/nps/price?end=2020-08-31T00%3A00%3A00%2B03%3A00&start=2020-08-30T00%3A00%3A00%2B03%3A00
+    # updated api csv request:
+    # https://dashboard.elering.ee/api/nps/price/csv?end=2020-08-31T00%3A00%3A00%2B03%3A00&fields=ee&start=2020-08-30T00%3A00%3A00%2B03%3A00
     now = datetime.datetime.now()
-    if offset < 0:
-        now -= datetime.timedelta(1)   # UTC time in URL, wind back time by 1 day (we are GMT+..), as we need today-s prices
-    start = now.strftime("%Y-%m-%d")        # UTC time in URL, prognosis starts yesterday from period (which is today)
+    start = now.strftime("%Y-%m-%d")  # local time in URL,
     tomorrow = now + datetime.timedelta(1)  # add 1 day
     end = tomorrow.strftime("%Y-%m-%d")
+    # old api
     # &start=2020-04-12+21:00:00&end=2020-04-13+21:00:00&format=csv
     # &start=2020-04-12+21%3A00%3A00&end=2020-04-13+21%3A00%3A00&format=csv
-    uri = "&start=" + start + "+" + hour_in_gmt + "%3A00%3A00&end=" + end + "+" + hour_in_gmt + "%3A00%3A00&format=csv"
+    uri = "start=" + start + "T" + "00%3A00%3A00%2B03%3A00&end=" + end + "T" + "00%3A00%3A00%2B03%3A00&fields=" + country
     url = baseurl + uri
-    resp = requests.get(url, allow_redirects=True)  # type: Response
+    try:
+        resp = requests.get(url, allow_redirects=True)  # type: Response
+    except:
+        resp = Response()  # empty for next code to work
     if resp.ok and len(resp.text) > 100:
         open(filename, 'w', encoding="utf-8").write(resp.text)  # need encoding in py3
-        logger("File for " + end + "(localtime) downloaded OK to " + filename + " using UTC offset " + utc_offset)
+        logger("File for " + start + "(localtime) downloaded OK to " + filename)
         ret = True
     else:
         logger("ERROR: download of " + url + " failed!, response:" + str(resp.content))
@@ -105,16 +106,16 @@ def read_prices(filename: str):
     borsihinnad = []
     with open(filename, "r") as f:
         f.readline()  # header line
-        for line in f:  # read by line
+        for line in f:  # read by line: "Ajatempel (UTC)";"Kuupäev (Eesti aeg)";"NPS Eesti"
             items = line.split(";")
-            if items[0] == 'ee':  # can be lv, lt, fi..
-                item2 = items[2]
-                hind1 = item2.replace("\n", "")  # last item contains CR
-                hind = hind1.replace(",", ".")  # input file uses Euro form of comma: ,
-                if is_float(hind):  # excpt first line which is rowheads
-                    hind_mw = float(hind)
-                    hind_kw = hind_mw / 1000
-                    borsihinnad.append(hind_kw)
+            item2 = items[2]
+            hind1 = item2.replace("\n", "")  # last item contains CR
+            hind = hind1.replace(",", ".")  # input file uses Euro form of comma: ,
+            hind = hind.replace('"', "")  #
+            if is_float(hind):  # excpt first line which is rowheads
+                hind_mw = float(hind)
+                hind_kw = hind_mw / 1000
+                borsihinnad.append(hind_kw)
     return borsihinnad
 
 
