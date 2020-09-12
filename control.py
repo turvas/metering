@@ -32,8 +32,8 @@ schedules = []          # list of schedules (which are lists)
 relays = []
 # power kW, consumption in Kwh, hrStart2 in 24h system, if no zone2, then 'hrStart2': 24
 loads = [
-    {'name': 'boiler1', 'gpioPin': 17, 'power': 2, 'daily_consumption': 11, 'hrStart2': 15, 'consumption2': 3},
-    {'name': 'boiler2', 'gpioPin': 27, 'power': 2, 'daily_consumption': 11, 'hrStart2': 15, 'consumption2': 3}
+    {'name': 'boiler1', 'gpioPin': 17, 'power': 2, 'daily_consumption': 14, 'hrStart2': 15, 'consumption2': 5},
+    {'name': 'boiler2', 'gpioPin': 27, 'power': 2, 'daily_consumption': 14, 'hrStart2': 15, 'consumption2': 5}
 ]
 # in shell:
 # echo none | sudo tee /sys/class/leds/led0/trigger
@@ -188,12 +188,16 @@ def get_price(di: dict):
     return di['price']
 
 
-def create_schedule(power, daily_consumption, hr_start=0, hr_end=24):
+def create_schedule(power, daily_consumption, hr_start=0, hr_end=24, weekend_comfort=True):
     """:return: list of 24 (default), with True (open realy) or False (leave connected),
     :param hr_end: end of schedule,
     :param hr_start: beginning of schedule,
     :param power kW (max. average/hr, not peak),
     :param daily_consumption kWh"""
+    if weekend_comfort:
+        day_nr = datetime.datetime.today().weekday()
+        if day_nr > 4:      # weekdays are 0-based, 4 = Fri
+            daily_consumption = int(daily_consumption * 3 / 2)
     price_dict = []
     for hr in range(hr_start, hr_end):  # prepare list of dictionary items for sorting
         di = {'hour': hr, 'price': prices[hr]}
