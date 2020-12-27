@@ -16,6 +16,7 @@ from gpiozero.pins.mock import MockFactory  # https://gpiozero.readthedocs.io/en
 import shared_energy_management as sem
 import paho.mqtt.client as mqtt
 mqtt_server = None
+mqtt_port = 1883
 
 # gpioPin is used as index in counters, thus has to be unique
 meters = [
@@ -29,12 +30,13 @@ total_start_time = datetime.datetime.now().isoformat(timespec='seconds')
 
 
 def init():
-    global mqtt_server
+    global mqtt_server, mqtt_port
     sem.set_dir_path()
     sem.init_db()
     for meter in meters:        # update config database
         sem.update_config_db(meter['gpioPin'], meter['name'])
     mqtt_server = os.environ.get('MQTT_SERVER', '10.10.10.6')
+    mqtt_port = int( os.environ.get('MQTT_PORT', '1883') )
     if os.name != 'posix':  # windows
         print("Init MockPins, impulse generation")
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
@@ -77,7 +79,7 @@ def insert_row():
 def create_mqtt(user: str, passw: str, persistent=False, app_name=""):
     """:returns: mqtt.Client, or None, if can't connect
     creates connection using creds"""
-    # mqtt_server = app.config['MQTT_SERVER']
+
     client = mqtt.Client()
     if mqtt_server:                             # is setup during create_app2
         if app_name == "":
@@ -85,7 +87,7 @@ def create_mqtt(user: str, passw: str, persistent=False, app_name=""):
         client = mqtt.Client(app_name + user, not persistent)  # clean_session=True by default, no msgs are kept after diconnect
         client.username_pw_set(username=user, password=passw)
         try:
-            client.connect(mqtt_server)
+            client.connect(mqtt_server, mqtt_port)
         except Exception as e:
             sem.Logger().log("create_mqtt connect Exception: " + str(e))
             client = None
@@ -117,6 +119,7 @@ def publish_mqtt():
             mqtt_client.disconnect()
     except Exception as e:
         sem.Logger().log(" publish_mqtt Exception: " + str(e))
+
 
 def init_counters():
     """initializes list and Buttons"""
