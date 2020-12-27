@@ -32,8 +32,8 @@ schedules = []          # list of schedules (which are lists)
 relays = []
 # power kW, consumption in Kwh, hrStart2 in 24h system, if no zone2, then 'hrStart2': 24
 loads = [
-    {'name': 'boiler1', 'gpioPin': 17, 'power': 2, 'daily_consumption': 14, 'hrStart2': 15, 'consumption2': 5},
-    {'name': 'boiler2', 'gpioPin': 27, 'power': 2, 'daily_consumption': 14, 'hrStart2': 15, 'consumption2': 5}
+    {'name': 'boiler1', 'gpioPin': 17, 'power': 2, 'daily_consumption': 16, 'hrStart2': 18, 'consumption2': 7},
+    {'name': 'boiler2', 'gpioPin': 27, 'power': 2, 'daily_consumption': 16, 'hrStart2': 18, 'consumption2': 7}
 ]
 # in shell:
 # echo none | sudo tee /sys/class/leds/led0/trigger
