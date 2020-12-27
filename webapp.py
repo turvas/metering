@@ -14,7 +14,7 @@ import shared_energy_management as sem
 NOPRINT_TRANS_TABLE = {
     i: None for i in range(0, sys.maxunicode + 1) if not chr(i).isprintable()
 }
-
+app = Flask(__name__)
 
 def make_printable(s):
     """Replace non-printable characters in a string."""
@@ -261,8 +261,6 @@ def check_control_app():
     if diff.seconds > 360:  # 6 minutes
         ret = '<br><div style="background-color:yellow;">Control program logs older than 5 mins, latest ' + tds + "</div><br>"
     return ret
-
-app = Flask(__name__)
 
 
 @app.route('/')
