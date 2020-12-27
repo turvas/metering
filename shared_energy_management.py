@@ -173,25 +173,28 @@ def get_offset_utc_s():
 
 def get_hourly_sum_db(gpio_pin: str, hr: int, day: str):
     """:return hourly sum for given day and hour,
+    :param gpio_pin number as str
+    :param hr number in 24h system, if 25 then full day
     :param day in formatted as YYYY-MM-DD,
-    :param hr number in 24h system,
-    :param gpio_pin number
     day and hr are in local tz"""
     db = get_db()
     cur = db.cursor()
-    # date_format = "%Y-%m-%d"        #
-    # dtstart = day.strftime(date_format) + " " + str(hr) + ":00:00"  # sqlite expects format YYYY-MM-DD HH:MM:SS
-    # dtend = day.strftime(date_format) + " " + str(hr + 1) + ":00:00"
-    if hr < 10:
-        hrs = "0" + str(hr)
+    if hr == 25:
+        hrs = "00"
     else:
-        hrs = str(hr)
+        if hr < 10:
+            hrs = "0" + str(hr)
+        else:
+            hrs = str(hr)
     date_format = "%Y-%m-%d %H:%M:%S"
     dtstart = day + " " + hrs + ":00:00" + get_offset_utc_s()  # sqlite expects format YYYY-MM-DD HH:MM:SS
     dtstart_tz = datetime.fromisoformat(dtstart)
     dtstart_utc = dtstart_tz.astimezone(timezone.utc)
     dtstart_utc_s = dtstart_utc.strftime(date_format)
-    dtend_utc = dtstart_utc + timedelta(hours=1)
+    if hr == 25:
+        dtend_utc = dtstart_utc + timedelta(hours=24)
+    else:
+        dtend_utc = dtstart_utc + timedelta(hours=1)
     dtend_utc_s = dtend_utc.strftime(date_format)
     sql = 'SELECT sum(pulses) FROM pulses WHERE gpiopin==' + gpio_pin + \
           ' AND created BETWEEN "' + dtstart_utc_s + '" AND "' + dtend_utc_s + '";'
@@ -201,6 +204,19 @@ def get_hourly_sum_db(gpio_pin: str, hr: int, day: str):
     if hr_sum is None:
         hr_sum = 0
     return hr_sum
+
+
+def get_db_pulses(gpio_pin: int):
+    """:return total pulses by this pin = Wh"""
+    db = get_db()
+    cur = db.cursor()
+    sql = 'SELECT sum(pulses) FROM pulses WHERE gpiopin==' + str(gpio_pin) + ';'
+    cur.execute(sql)
+    row = cur.fetchone()
+    sum = row[0]
+    if sum is None:
+        sum = 0
+    return sum
 
 
 def get_db_dates(gpio_pin: str):
