@@ -21,6 +21,7 @@ mqtt_port = 1883
 mqtt_user = 'met_00001'
 mqtt_pass = 'testPa55'
 log_fn = "measure.log"
+conf_fn = "config.env"
 
 # gpioPin is used as index in counters, thus has to be unique
 meters = [
@@ -35,13 +36,13 @@ total_start_time = datetime.datetime.now().isoformat(timespec='seconds')
 
 def init():
     """read configuration file config.env and sets global vars"""
-    global mqtt_server, mqtt_port, mqtt_user, mqtt_pass
+    global mqtt_server, mqtt_port, mqtt_user, mqtt_pass, conf_fn
     sem.set_dir_path()
     sem.init_db()
     for meter in meters:        # update config database
         sem.update_config_db(meter['gpioPin'], meter['name'])
     config = configparser.ConfigParser()
-    conf_fn = "config.env"
+    conf_fn = sem.dirpath + conf_fn             # fix os dependent path
     file_list = config.read(conf_fn)
     if len(file_list) == 0:     # emty list, if failed
         sem.Logger(log_fn).log(" init config failed from: " + conf_fn)
