@@ -198,6 +198,7 @@ def main():
     sem.Logger(log_fn).log("Starting metering app.")
     init_counters()
     handle_time_event()
+    publish_mqtt()                                  # publish current readings to mqtt
     schedule.every(1).minutes.do(handle_time_event)
     schedule.every(2).minutes.do(publish_mqtt)      # todo change update to 5 min for Live
 
