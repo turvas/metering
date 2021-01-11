@@ -12,11 +12,16 @@ import schedule
 from gpiozero import Device, Button
 # for Win testing
 from gpiozero.pins.mock import MockFactory  # https://gpiozero.readthedocs.io/en/stable/api_pins.html#mock-pins
+import configparser
+#from dotenv import load_dotenv
 # shared variables and functions
 import shared_energy_management as sem
 import paho.mqtt.client as mqtt
 mqtt_server = None
 mqtt_port = 1883
+mqtt_user = 'met_00001'
+mqtt_pass = 'testPa55'
+log_fn = "measure.log"
 
 # gpioPin is used as index in counters, thus has to be unique
 meters = [
@@ -30,13 +35,20 @@ total_start_time = datetime.datetime.now().isoformat(timespec='seconds')
 
 
 def init():
-    global mqtt_server, mqtt_port
+    """read configuration file config.env and sets global vars"""
+    global mqtt_server, mqtt_port, mqtt_user, mqtt_pass
     sem.set_dir_path()
     sem.init_db()
     for meter in meters:        # update config database
         sem.update_config_db(meter['gpioPin'], meter['name'])
-    mqtt_server = os.environ.get('MQTT_SERVER', '10.10.10.6')
-    mqtt_port = int( os.environ.get('MQTT_PORT', '1883') )
+    config = configparser.ConfigParser()
+    config.read("config.env")
+    #load_dotenv()
+    env = config['DEFAULT']['ENV']
+    mqtt_server = config[env]['MQTT_SERVER']    # os.environ.get('MQTT_SERVER', '10.10.10.6')   # os.getenv('MQTT_SERVER')
+    mqtt_port = int( config[env]['MQTT_PORT'] )    # os.environ.get('MQTT_PORT', '1883') )
+    mqtt_user = config[env]['MQTT_USER']    # os.environ.get('MQTT_USER', 'met_00002')
+    mqtt_pass = config[env]['MQTT_PASSWORD']    # os.environ.get('MQTT_PASSWORD', 'testPa55')
     if os.name != 'posix':  # windows
         print("Init MockPins, impulse generation")
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
@@ -76,6 +88,20 @@ def insert_row():
             f.write(txt)
 
 
+def on_connect(client, userdata, flags, rc):
+    """callback to be attached to mqtt client"""
+    error_msg = ("Connection successful",                               # 0
+                 "Connection refused – incorrect protocol version",     # 1
+                 "Connection refused – invalid client identifier",      # 2
+                 "Connection refused – server unavailable",             # 3
+                 "Connection refused – bad username or password",       # 4
+                 "Connection refused – not authorised")                 # 5
+    if rc > 0:
+        client.bad_connection_flag=True
+        sem.Logger(log_fn).log(" on_connect, rc=" + str(rc) + " " + error_msg[rc])
+    else:
+        client.connected_flag = True  # set flag
+
 def create_mqtt(user: str, passw: str, persistent=False, app_name=""):
     """:returns: mqtt.Client, or None, if can't connect
     creates connection using creds"""
@@ -84,22 +110,33 @@ def create_mqtt(user: str, passw: str, persistent=False, app_name=""):
     if mqtt_server:                             # is setup during create_app2
         if app_name == "":
             app_name = "rasp-pi"
+        mqtt.Client.connected_flag = False                      # create flag in class
+        mqtt.Client.bad_connection_flag = False
         client = mqtt.Client(app_name + user, not persistent)  # clean_session=True by default, no msgs are kept after diconnect
         client.username_pw_set(username=user, password=passw)
+        client.on_connect = on_connect                          # bind callback function
         try:
+            if mqtt_port == 8883:
+                client.tls_set()                        #  tls_version=ssl.PROTOCOL_TLS
             client.connect(mqtt_server, mqtt_port)
+            client.loop_start()                         # Start loop
+            while not client.connected_flag or client.bad_connection_flag:  # wait in loop till on_connect callback is executed
+                time.sleep(1)
+            if client.bad_connection_flag:
+                #sem.Logger(log_fn).log("create_mqtt connect failed:")
+                client = None
         except Exception as e:
-            sem.Logger().log("create_mqtt connect Exception: " + str(e))
+            sem.Logger(log_fn).log("create_mqtt connect Exception: " + str(e))
             client = None
     else:
-        sem.Logger().log("create_mqtt WARNING: no MQTT_SERVER assigned!")
+        sem.Logger(log_fn).log("create_mqtt WARNING: no MQTT_SERVER assigned!")
     return client
 
 
 def publish_mqtt():
     """publishes total energy to MQTT channel, run by scheduler every 5 min"""
     try:
-        mqtt_client = create_mqtt('met_00001', 'ISOgvmcglC')
+        mqtt_client = create_mqtt(mqtt_user, mqtt_pass)   # ('met_00001', 'ISOgvmcglC')
         if mqtt_client is None:
             return
         now = datetime.datetime.now()
@@ -114,11 +151,14 @@ def publish_mqtt():
                   '","Total":' + str(total_energy) + ',"Yesterday":0,"Today":' + str(today_energy) + '}}'
             topic = meter['name']
             fulltopic = "tele/unassigned/" + topic + "/SENSOR"
-            mqtt_client.publish(fulltopic, msg)
+            info = mqtt_client.publish(fulltopic, msg)
+            if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                sem.Logger(log_fn).log(" publish_mqtt failed, rc=" + str(info.rc))
         if mqtt_client:
+            mqtt_client.loop_stop()  # Stop loop  started
             mqtt_client.disconnect()
     except Exception as e:
-        sem.Logger().log(" publish_mqtt Exception: " + str(e))
+        sem.Logger(log_fn).log(" publish_mqtt Exception: " + str(e))
 
 
 def init_counters():
@@ -159,7 +199,7 @@ def main():
     init_counters()
     handle_time_event()
     schedule.every(1).minutes.do(handle_time_event)
-    schedule.every(3).minutes.do(publish_mqtt)
+    schedule.every(2).minutes.do(publish_mqtt)      # todo change update to 5 min for Live
 
     killer = sem.GracefulKiller()
     killer.cleanup_func = cleanup
