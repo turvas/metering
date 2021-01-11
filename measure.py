@@ -13,7 +13,6 @@ from gpiozero import Device, Button
 # for Win testing
 from gpiozero.pins.mock import MockFactory  # https://gpiozero.readthedocs.io/en/stable/api_pins.html#mock-pins
 import configparser
-#from dotenv import load_dotenv
 # shared variables and functions
 import shared_energy_management as sem
 import paho.mqtt.client as mqtt
@@ -43,10 +42,9 @@ def init():
         sem.update_config_db(meter['gpioPin'], meter['name'])
     config = configparser.ConfigParser()
     config.read("config.env")
-    #load_dotenv()
     env = config['DEFAULT']['ENV']
     mqtt_server = config[env]['MQTT_SERVER']    # os.environ.get('MQTT_SERVER', '10.10.10.6')   # os.getenv('MQTT_SERVER')
-    mqtt_port = int( config[env]['MQTT_PORT'] )    # os.environ.get('MQTT_PORT', '1883') )
+    mqtt_port = int(config[env]['MQTT_PORT'])    # os.environ.get('MQTT_PORT', '1883') )
     mqtt_user = config[env]['MQTT_USER']    # os.environ.get('MQTT_USER', 'met_00002')
     mqtt_pass = config[env]['MQTT_PASSWORD']    # os.environ.get('MQTT_PASSWORD', 'testPa55')
     if os.name != 'posix':  # windows
@@ -97,10 +95,11 @@ def on_connect(client, userdata, flags, rc):
                  "Connection refused – bad username or password",       # 4
                  "Connection refused – not authorised")                 # 5
     if rc > 0:
-        client.bad_connection_flag=True
+        client.bad_connection_flag = True
         sem.Logger(log_fn).log(" on_connect, rc=" + str(rc) + " " + error_msg[rc])
     else:
         client.connected_flag = True  # set flag
+
 
 def create_mqtt(user: str, passw: str, persistent=False, app_name=""):
     """:returns: mqtt.Client, or None, if can't connect
@@ -117,13 +116,12 @@ def create_mqtt(user: str, passw: str, persistent=False, app_name=""):
         client.on_connect = on_connect                          # bind callback function
         try:
             if mqtt_port == 8883:
-                client.tls_set()                        #  tls_version=ssl.PROTOCOL_TLS
+                client.tls_set()                        # tls_version=ssl.PROTOCOL_TLS
             client.connect(mqtt_server, mqtt_port)
             client.loop_start()                         # Start loop
             while not client.connected_flag or client.bad_connection_flag:  # wait in loop till on_connect callback is executed
                 time.sleep(1)
             if client.bad_connection_flag:
-                #sem.Logger(log_fn).log("create_mqtt connect failed:")
                 client = None
         except Exception as e:
             sem.Logger(log_fn).log("create_mqtt connect Exception: " + str(e))
@@ -190,12 +188,14 @@ def simulate_impulses(pin=3, maxcount=9):
         for i in range(nr):
             simulate_impulse(pin)
 
+
 def cleanup():
     sem.close_db()
 
 
 def main():
     init()
+    sem.Logger(log_fn).log("Starting metering app.")
     init_counters()
     handle_time_event()
     schedule.every(1).minutes.do(handle_time_event)
@@ -206,6 +206,7 @@ def main():
     while not killer.kill_now:
         schedule.run_pending()
         time.sleep(1)  # seconds
+    sem.Logger(log_fn).log("Exiting metering app.")
 
 
 if __name__ == '__main__':
