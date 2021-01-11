@@ -118,12 +118,15 @@ def init_db():
 def update_config_db(gpio: int, name: str, gpio_type=1, power=0, energy=0, time2=0, energy2=0):
     """updates configuration table with IO objects,
      :params type can be 1=meter(default) or 2=relay"""
-    db = get_db()
-    cur = db.cursor()
-    val = (gpio, name, gpio_type, power, energy, time2, energy2)
-    cur.execute('REPLACE INTO config(gpiopin, name, type, power, energy, time2, energy2) VALUES (?,?,?,?,?,?,?)',
-                val)  # to avoid sql injection
-    db.commit()
+    try:
+        db = get_db()
+        cur = db.cursor()
+        val = (gpio, name, gpio_type, power, energy, time2, energy2)
+        cur.execute('REPLACE INTO config(gpiopin, name, type, power, energy, time2, energy2) VALUES (?,?,?,?,?,?,?)', val)  # to avoid sql injection
+        db.commit()
+    except Exception as e:
+        appname = os.path.basename(__file__)[:-3]  # remove .py from end
+        Logger(appname + ".log").log("update_config_db Exception: " + str(e))
 
 
 def get_configs_db(gpio_type=1):
@@ -141,11 +144,15 @@ def get_configs_db(gpio_type=1):
 
 def insert_row_db(gpio_pin: int, value: int):
     """saves pulses to database table, timestamps are in UTC"""
-    db = get_db()
-    cur = db.cursor()
-    val = (gpio_pin, value)
-    cur.execute('INSERT INTO pulses(gpiopin, pulses) VALUES (?,?)', val)  # to avoid sql injection
-    db.commit()
+    try:
+        db = get_db()
+        cur = db.cursor()
+        val = (gpio_pin, value)
+        cur.execute('INSERT INTO pulses(gpiopin, pulses) VALUES (?,?)', val)  # to avoid sql injection
+        db.commit()
+    except Exception as e:
+        appname = os.path.basename(__file__)[:-3]  # remove .py from end
+        Logger(appname + ".log").log("insert_row_db Exception: " + str(e))
 
 
 def get_offset_utc():

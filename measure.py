@@ -41,12 +41,16 @@ def init():
     for meter in meters:        # update config database
         sem.update_config_db(meter['gpioPin'], meter['name'])
     config = configparser.ConfigParser()
-    config.read("config.env")
+    conf_fn = "config.env"
+    file_list = config.read(conf_fn)
+    if len(file_list) == 0:     # emty list, if failed
+        sem.Logger(log_fn).log(" init config failed from: " + conf_fn)
     env = config['DEFAULT']['ENV']
     mqtt_server = config[env]['MQTT_SERVER']    # os.environ.get('MQTT_SERVER', '10.10.10.6')   # os.getenv('MQTT_SERVER')
     mqtt_port = int(config[env]['MQTT_PORT'])    # os.environ.get('MQTT_PORT', '1883') )
     mqtt_user = config[env]['MQTT_USER']    # os.environ.get('MQTT_USER', 'met_00002')
     mqtt_pass = config[env]['MQTT_PASSWORD']    # os.environ.get('MQTT_PASSWORD', 'testPa55')
+    sem.Logger(log_fn).log(" init config, MQTT_SERVER=" + mqtt_server + ":" + str(mqtt_port) + " MQTT_USER=" + mqtt_user)
     if os.name != 'posix':  # windows
         print("Init MockPins, impulse generation")
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
