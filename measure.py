@@ -46,6 +46,8 @@ def init():
     file_list = config.read(conf_fn)
     if len(file_list) == 0:     # emty list, if failed
         sem.Logger(log_fn).log(" init config failed from: " + conf_fn)
+    else:
+        print(f"Loading config from {conf_fn}")
     env = config['DEFAULT']['ENV']
     mqtt_server = config[env]['MQTT_SERVER']    # os.environ.get('MQTT_SERVER', '10.10.10.6')   # os.getenv('MQTT_SERVER')
     mqtt_port = int(config[env]['MQTT_PORT'])    # os.environ.get('MQTT_PORT', '1883') )
