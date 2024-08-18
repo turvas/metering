@@ -4,6 +4,7 @@ import signal
 import datetime
 import sqlite3
 from datetime import timedelta, datetime, timezone  # tzinfo
+import pytz
 
 control_fn = "web.control"
 control_log_fn = "control.log"
@@ -14,7 +15,7 @@ database_fn = "energy-management-sqlite.db"
 db_conn = None
 
 dirpath = "./"  # subject to change, depending OS
-
+DEFAULT_TIMEZONE = "Europe/Tallinn"
 
 def set_dir_path():
     """:returns: and sets global dirpath, OS dependent directory,  . for win, /var/metering for ux"""
@@ -155,14 +156,16 @@ def insert_row_db(gpio_pin: int, value: int):
         Logger(appname + ".log").log("insert_row_db Exception: " + str(e))
 
 
-def get_offset_utc():
+def get_offset_utc(tzone=DEFAULT_TIMEZONE):
     """:returns: int localtime hours diff from UTC"""
-    if time.daylight and time.localtime().tm_isdst > 0:  # consider DST,
-        offset = time.altzone  # is negative for positive timezone and in seconds
-    else:
-        offset = time.timezone
-    offset = int(offset / 3600)  # in seconds -> hrs (in python3 result would be float)
-    return 0 - offset  # convert polarity to normal
+    now_loc = datetime.now(pytz.timezone(tzone))
+    offset = now_loc.tzinfo._utcoffset.seconds
+    # if time.daylight and time.localtime().tm_isdst > 0:  # consider DST,
+    #     offset = time.altzone  # is negative for positive timezone and in seconds
+    # else:
+    #     offset = time.timezone
+    offset_hr = int(offset / 3600)  # in seconds -> hrs (in python3 result would be float)
+    return offset_hr
 
 
 def get_offset_utc_s():
@@ -182,7 +185,7 @@ def get_hourly_sum_db(gpio_pin: str, hr: int, day: str):
     """:return hourly sum for given day and hour,
     :param gpio_pin number as str
     :param hr number in 24h system, if 25 then full day
-    :param day in formatted as YYYY-MM-DD,
+    :param day in formatted as YYYY-MM-DD, localtime
     day and hr are in local tz"""
     db = get_db()
     cur = db.cursor()

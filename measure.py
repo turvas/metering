@@ -144,8 +144,8 @@ def publish_mqtt():
         mqtt_client = create_mqtt(mqtt_user, mqtt_pass)   # ('met_00001', 'ISOgvmcglC')
         if mqtt_client is None:
             return
-        now = datetime.datetime.now()
-        today = datetime.date.today()
+        now = datetime.datetime.now()   # local time unaware
+        today = datetime.date.today()   # local time unaware
         for meter in meters:
             gpio_pin = meter['gpioPin']
             total_count = sem.get_db_pulses(gpio_pin)

@@ -118,7 +118,7 @@ def get_metering_log(date: str, filename: str, linefeed="<br>", sum_only=False):
 
 def get_metering_db(date: str, gpio_pin: str, linefeed="<br>", sum_only=False):
     """:returns: multiline aggregated hourly (or daily) readings and daily/monthly sum,
-    :param date in form YYYY-MM-DD or All for full month"""
+    :param date in form YYYY-MM-DD or All for full month, localtime naive"""
     outline = ""
     dsum = 0
     if date != "All":
