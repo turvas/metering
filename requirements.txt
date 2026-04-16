@@ -3,3 +3,6 @@ requests==2.32.0
 Flask==2.3.2
 gpiozero==1.6.2
 paho-mqtt==1.6.1
+pytz
+setuptools
+RPi.GPIO
