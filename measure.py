@@ -213,7 +213,7 @@ def main():
     killer.cleanup_func = cleanup
     while not killer.kill_now:
         schedule.run_pending()
-        time.sleep(1)  # seconds
+        time.sleep(2)  # seconds
     sem.Logger(log_fn).log("Exiting metering app.")
 
 
