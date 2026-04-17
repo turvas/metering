@@ -389,20 +389,22 @@ def metering2():
     for meter in meters:
         meter_name = meter[2]  # id, gpio, name, ...
         meter_names.append(meter_name)
-
+    now = datetime.datetime.utcnow()
+    shift = sem.get_offset_utc()
+    now += datetime.timedelta(hours=shift)  # to get localtime
+    today = now.strftime("%Y-%m-%d")
     if request.method == 'POST':  # in not first time
         date = request.form['date']
         meter_name = request.form['file']
     else:  # first time
-        now = datetime.datetime.now()
-        date = now.strftime("%Y-%m-%d")
+        date = today
         meter_name = meter_names[0]  # assume there is at least 1
     for meter in meters:  # search gpiopin
         if meter[2] == meter_name:  # name matches
             gpio = meter[1]
-    dateslist = sem.get_db_dates(str(gpio)) + ["All"]
-    if date not in dateslist:  # unlikely nothing for today case
-        date = dateslist[0]  # pick last date available
+    dateslist = sem.get_db_dates(str(gpio)) + ["All"]   # UTC dates
+    if today not in dateslist:  # unlikely nothing for today case
+        dateslist.append(today)  # pick last date available
     outline = render_template('webapp-metering-log.tmpl', dates=dateslist, file=meter_name, date=date,
                               files=meter_names) + "<br>"
 

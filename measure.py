@@ -29,7 +29,7 @@ meters = [
     {'name': 'katel', 'gpioPin': 3}
 ]
 
-counters = []  # list 32
+counters = []  # list[32] for each gpio pin
 buttons = []  # = meters
 total_start_time = datetime.datetime.now().isoformat(timespec='seconds')
 
@@ -67,17 +67,17 @@ def light_pulse_seen_1(device_calling):
 
 
 def handle_time_event():
-    """called by scheduler every min"""
+    """called by scheduler every min, saves and resets counters"""
     global counters
-    insert_row()  # log state
+    save_counters_values()  # log state
     for meter in meters:
         gpio_pin = meter['gpioPin']
         counters[gpio_pin] = 0
 
 
-def insert_row():
-    """writes impulse counts to files, named by metered objects"""
-    dt = datetime.datetime.now()
+def save_counters_values():
+    """writes impulse counts to DB and files, named by metered objects"""
+    dt = datetime.datetime.utcnow()    # naive utc
     dtf = dt.strftime("%x %X")
     ym = dt.strftime("%Y-%m")
 
@@ -87,10 +87,11 @@ def insert_row():
         sem.insert_row_db(gpio_pin, val)
 
         txt = dtf + " " + str(val) + "\n"
-        print(txt)
+        print(f"{dtf} UTC pin-{gpio_pin}: {val}")
         fn = sem.dirpath + "pulses-" + meter['name'] + "-" + str(ym) + ".txt"
         with open(fn, "a") as f:
             f.write(txt)
+    print("-")
 
 
 def on_connect(client, userdata, flags, rc):

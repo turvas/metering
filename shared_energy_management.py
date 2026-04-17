@@ -230,7 +230,7 @@ def get_db_pulses(gpio_pin: int):
 
 
 def get_db_dates(gpio_pin: str):
-    """:return: reverse sorted list unique dates for load,
+    """:return: reverse sorted list unique dates (UTC) for load,
     :param gpio_pin corrsponding to load"""
     dateslist = []
     db = get_db()
