@@ -53,7 +53,7 @@ def init():
     mqtt_port = int(config[env]['MQTT_PORT'])    # os.environ.get('MQTT_PORT', '1883') )
     mqtt_user = config[env]['MQTT_USER']    # os.environ.get('MQTT_USER', 'met_00002')
     mqtt_pass = config[env]['MQTT_PASSWORD']    # os.environ.get('MQTT_PASSWORD', 'testPa55')
-    sem.Logger(log_fn).log(" init config, MQTT_SERVER=" + mqtt_server + ":" + str(mqtt_port) + " MQTT_USER=" + mqtt_user)
+    sem.Logger(log_fn).log(f" init config {conf_fn}, MQTT_SERVER={mqtt_server}:{mqtt_port} MQTT_USER={mqtt_user}")
     if os.name != 'posix':  # windows
         print("Init MockPins, impulse generation")
         Device.pin_factory = MockFactory()  # Set the default pin factory to a mock factory
@@ -214,7 +214,7 @@ def main():
     killer.cleanup_func = cleanup
     while not killer.kill_now:
         schedule.run_pending()
-        time.sleep(1)  # seconds
+        time.sleep(2)  # seconds
     sem.Logger(log_fn).log("Exiting metering app.")
 
 
